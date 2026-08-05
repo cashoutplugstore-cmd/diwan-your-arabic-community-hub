@@ -1,0 +1,40 @@
+import { Link } from "@tanstack/react-router";
+import { useI18n } from "@/contexts/i18n-context";
+import { primaryNav, secondaryNav } from "./nav-items";
+
+export function Sidebar() {
+  const { t } = useI18n();
+
+  return (
+    <aside className="sticky top-[73px] hidden h-[calc(100dvh-73px)] w-60 shrink-0 overflow-y-auto scrollbar-slim border-e px-3 py-5 lg:block">
+      <nav className="space-y-1" aria-label={t.nav.home}>
+        {primaryNav.map((item) => (
+          <Link
+            key={item.to}
+            to={item.to}
+            activeOptions={{ exact: item.to === "/" }}
+            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground data-[status=active]:bg-secondary data-[status=active]:text-foreground"
+          >
+            <item.icon className="size-4 shrink-0" aria-hidden />
+            <span className="truncate">{item.label(t)}</span>
+          </Link>
+        ))}
+      </nav>
+
+      <div className="my-4 border-t" />
+
+      <nav className="space-y-1">
+        {secondaryNav.map((item) => (
+          <Link
+            key={item.to}
+            to={item.to}
+            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground data-[status=active]:bg-secondary data-[status=active]:text-foreground"
+          >
+            <item.icon className="size-4 shrink-0" aria-hidden />
+            <span className="truncate">{item.label(t)}</span>
+          </Link>
+        ))}
+      </nav>
+    </aside>
+  );
+}
