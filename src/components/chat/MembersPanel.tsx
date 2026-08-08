@@ -45,6 +45,31 @@ function PanelContent({ members, presence, activity = [] }: Props) {
   </>;
 }
 
+function ActivityOverlay({ activity }: { activity: PresenceActivity[] }) {
+  const [visibleId, setVisibleId] = useState<string | null>(null);
+  const latest = activity[0];
+
+  useEffect(() => {
+    if (!latest) return;
+    setVisibleId(latest.id);
+    const timer = window.setTimeout(() => setVisibleId((id) => id === latest.id ? null : id), 2800);
+    return () => window.clearTimeout(timer);
+  }, [latest?.id]);
+
+  if (!latest || visibleId !== latest.id) return null;
+
+  return (
+    <div className="pointer-events-none fixed inset-x-0 top-1/2 z-[80] flex -translate-y-1/2 justify-center px-4" aria-live="polite">
+      <div className="flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full border border-border/70 bg-background/85 px-4 py-2 text-xs shadow-xl backdrop-blur-md sm:text-sm">
+        <span className="grid size-6 shrink-0 place-items-center rounded-full bg-secondary">
+          {latest.type === "join" ? <LogIn className="size-3.5 text-emerald-400" aria-hidden /> : <LogOut className="size-3.5 text-muted-foreground" aria-hidden />}
+        </span>
+        <span className="truncate"><strong className="font-semibold">{latest.displayName}</strong> {latest.type === "join" ? "انضم إلى الغرفة" : "غادر الغرفة"}</span>
+      </div>
+    </div>
+  );
+}
+
 export function MembersPanel(props: Props) {
   const [open, setOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches);
@@ -70,20 +95,13 @@ export function MembersPanel(props: Props) {
     const sync = () => setIsMobile(media.matches);
     sync(); media.addEventListener("change", sync); return () => media.removeEventListener("change", sync);
   }, []);
-  useEffect(() => {
-    if (!isMobile || typeof document === "undefined") return;
-    const title = document.querySelector<HTMLElement>("main header h1");
-    if (!title) return;
-    const previousRole = title.getAttribute("role"); const previousTabIndex = title.getAttribute("tabindex"); const previousLabel = title.getAttribute("aria-label");
-    title.setAttribute("role", "button"); title.setAttribute("tabindex", "0"); title.setAttribute("aria-label", `${title.textContent?.trim() || "الغرفة"} — ${t.chat.members}`); title.classList.add("cursor-pointer", "select-none");
-    const openFromTitle = () => setOpen(true); const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setOpen(true); } };
-    title.addEventListener("click", openFromTitle); title.addEventListener("keydown", onKeyDown);
-    return () => { title.removeEventListener("click", openFromTitle); title.removeEventListener("keydown", onKeyDown); if (previousRole === null) title.removeAttribute("role"); else title.setAttribute("role", previousRole); if (previousTabIndex === null) title.removeAttribute("tabindex"); else title.setAttribute("tabindex", previousTabIndex); if (previousLabel === null) title.removeAttribute("aria-label"); else title.setAttribute("aria-label", previousLabel); title.classList.remove("cursor-pointer", "select-none"); };
-  }, [isMobile, t.chat.members]);
+  useEffect(() => { if (!isMobile || typeof document === "undefined") return; const title = document.querySelector<HTMLElement>("main header h1"); if (!title) return; const previousRole = title.getAttribute("role"); const previousTabIndex = title.getAttribute("tabindex"); const previousLabel = title.getAttribute("aria-label"); title.setAttribute("role", "button"); title.setAttribute("tabindex", "0"); title.setAttribute("aria-label", `${title.textContent?.trim() || "الغرفة"} — ${t.chat.members}`); title.classList.add("cursor-pointer", "select-none"); const openFromTitle = () => setOpen(true); const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setOpen(true); } }; title.addEventListener("click", openFromTitle); title.addEventListener("keydown", onKeyDown); return () => { title.removeEventListener("click", openFromTitle); title.removeEventListener("keydown", onKeyDown); if (previousRole === null) title.removeAttribute("role"); else title.setAttribute("role", previousRole); if (previousTabIndex === null) title.removeAttribute("tabindex"); else title.setAttribute("tabindex", previousTabIndex); if (previousLabel === null) title.removeAttribute("aria-label"); else title.setAttribute("aria-label", previousLabel); title.classList.remove("cursor-pointer", "select-none"); }; }, [isMobile, t.chat.members]);
   useEffect(() => { if (!open || typeof document === "undefined") return; const previous = document.body.style.overflow; document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = previous; }; }, [open]);
   useEffect(() => { if (!open) return; const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); }; window.addEventListener("keydown", onKeyDown); return () => window.removeEventListener("keydown", onKeyDown); }, [open]);
 
   const panelProps = { ...props, activity: localActivity };
-  if (isMobile) return <>{open ? <div className="fixed inset-0 z-[70]" role="presentation"><button type="button" className="absolute inset-0 bg-background/60 backdrop-blur-sm" onClick={() => setOpen(false)} aria-label="إغلاق الأعضاء" /><aside className="absolute inset-y-0 end-0 flex w-[min(88vw,22rem)] flex-col overflow-hidden border-s bg-background shadow-2xl" role="dialog" aria-modal="true" aria-label={t.chat.members}><div className="flex shrink-0 items-center justify-between border-b p-2"><span className="px-2 text-xs font-semibold text-muted-foreground">{t.chat.members}</span><Button type="button" variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="إغلاق"><X className="size-4" /></Button></div><PanelContent {...panelProps} /></aside></div> : null}</>;
-  return <aside className="glass flex w-64 min-w-0 shrink-0 flex-col overflow-hidden rounded-3xl"><PanelContent {...panelProps} /></aside>;
+  return <>
+    <ActivityOverlay activity={localActivity} />
+    {isMobile ? <>{open ? <div className="fixed inset-0 z-[70]" role="presentation"><button type="button" className="absolute inset-0 bg-background/60 backdrop-blur-sm" onClick={() => setOpen(false)} aria-label="إغلاق الأعضاء" /><aside className="absolute inset-y-0 end-0 flex w-[min(88vw,22rem)] flex-col overflow-hidden border-s bg-background shadow-2xl" role="dialog" aria-modal="true" aria-label={t.chat.members}><div className="flex shrink-0 items-center justify-between border-b p-2"><span className="px-2 text-xs font-semibold text-muted-foreground">{t.chat.members}</span><Button type="button" variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="إغلاق"><X className="size-4" /></Button></div><PanelContent {...panelProps} /></aside></div> : null}</> : <aside className="glass flex w-64 min-w-0 shrink-0 flex-col overflow-hidden rounded-3xl"><PanelContent {...panelProps} /></aside>}
+  </>;
 }
