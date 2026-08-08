@@ -8,6 +8,7 @@ export type Friendship = Tables<"friendships">;
 export type Notification = Tables<"notifications">;
 export type UserRole = Tables<"user_roles">;
 
+export type RoomMemberWithProfile = Profile & { room_role: string };
 export type MessageWithAuthor = Message & { author: Profile | null };
 export type RoomWithMeta = Room & { member_count: number; is_member: boolean };
 
