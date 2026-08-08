@@ -17,14 +17,24 @@ export async function updateProfile(userId: string, patch: Partial<Profile>) {
 }
 
 export async function searchProfiles(term: string): Promise<Profile[]> {
-  if (!term.trim()) return [];
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .or(`username.ilike.%${term}%,display_name.ilike.%${term}%`)
-    .limit(20);
-  if (error) throw error;
-  return data ?? [];
+  const normalized = term.trim();
+  if (!normalized) return [];
+
+  // Do not interpolate user input into PostgREST's `.or()` filter syntax.
+  // Separate ilike queries keep search text out of the filter expression grammar.
+  const pattern = `%${normalized}%`;
+  const [usernameRes, displayNameRes] = await Promise.all([
+    supabase.from("profiles").select("*").ilike("username", pattern).limit(20),
+    supabase.from("profiles").select("*").ilike("display_name", pattern).limit(20),
+  ]);
+  if (usernameRes.error) throw usernameRes.error;
+  if (displayNameRes.error) throw displayNameRes.error;
+
+  const byId = new Map<string, Profile>();
+  for (const profile of [...(usernameRes.data ?? []), ...(displayNameRes.data ?? [])]) {
+    byId.set(profile.id, profile);
+  }
+  return [...byId.values()].slice(0, 20);
 }
 
 export const profileQuery = (userId: string | undefined) =>
