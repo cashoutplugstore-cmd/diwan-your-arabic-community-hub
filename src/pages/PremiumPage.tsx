@@ -61,15 +61,15 @@ export function PremiumPage() {
         </section>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
-          <PlanCard plan="monthly" title="VIP شهري" price="€4.99" subtitle="مرونة بدون التزام سنوي" features={features} disabled={pending || request.isPending} onRequest={request.mutate} />
-          <PlanCard plan="yearly" title="VIP سنوي" price="€39.99" subtitle="أفضل قيمة لأعضاء ديوان" features={features} featured disabled={pending || request.isPending} onRequest={request.mutate} />
+          <PlanCard plan="two_week" title="VIP أسبوعين" price="€4.99" subtitle="تجربة VIP لمدة 14 يوم" features={features} disabled={pending || request.isPending} onRequest={request.mutate} />
+          <PlanCard plan="monthly" title="VIP شهري" price="€15.99" subtitle="اشتراك كامل لمدة شهر" features={features} featured disabled={pending || request.isPending} onRequest={request.mutate} />
         </div>
       )}
 
       <section className="glass rounded-3xl p-5 text-sm text-muted-foreground">
         <div className="flex items-start gap-3">
           <Sparkles className="mt-0.5 size-5 shrink-0 text-primary" />
-          <p>حاليًا صفحة الاشتراك تسجل طلب VIP بأمان كـ <strong className="text-foreground">pending</strong>. لا يستطيع المستخدم إعطاء نفسه حالة active من المتصفح. ربط بوابة الدفع الفعلية (Stripe) يكون في الخطوة التالية بعد تجهيز مفاتيح الدفع.</p>
+          <p>الأسعار الحالية: <strong className="text-foreground">€4.99 لأسبوعين</strong> و<strong className="text-foreground">€15.99 للشهر</strong>. حاليًا الطلب يسجل كـ <strong className="text-foreground">pending</strong> بأمان، ولا يستطيع المستخدم إعطاء نفسه حالة active. ربط Stripe سيكون بعد فحصك للصفحة.</p>
         </div>
       </section>
     </div>
@@ -100,18 +100,14 @@ function PlanCard({
       {featured ? <Badge className="mb-4">الأكثر اختيارًا</Badge> : null}
       <h2 className="font-display text-2xl font-extrabold">{title}</h2>
       <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
-      <div className="mt-5 flex items-end gap-2"><span className="font-display text-4xl font-black">{price}</span><span className="pb-1 text-sm text-muted-foreground">{plan === "monthly" ? "/ شهر" : "/ سنة"}</span></div>
+      <div className="mt-5 flex items-end gap-2"><span className="font-display text-4xl font-black">{price}</span><span className="pb-1 text-sm text-muted-foreground">{plan === "two_week" ? "/ 14 يوم" : "/ شهر"}</span></div>
       <ul className="mt-6 space-y-3 text-sm">
         {features.map((feature) => <li key={feature} className="flex gap-2"><Check className="mt-0.5 size-4 shrink-0 text-primary" />{feature}</li>)}
       </ul>
       <Button className="mt-7 h-11 w-full rounded-xl" disabled={disabled} onClick={() => onRequest(plan)}>
-        {disabled && !requestingLabel(plan) ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+        {disabled ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
         {disabled ? "طلبك قيد المعالجة" : "طلب اشتراك VIP"}
       </Button>
     </article>
   );
-}
-
-function requestingLabel(_plan: PremiumPlan) {
-  return false;
 }
