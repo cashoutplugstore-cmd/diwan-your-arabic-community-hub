@@ -51,6 +51,16 @@ export function MembersPanel({ members, presence }: { members: RoomMemberWithPro
       role: member.room_role || "member",
       demo: false,
     }));
+    const presenceExtras: Row[] = presence
+      .filter((entry) => !realIds.has(entry.userId))
+      .map((entry) => ({
+        id: entry.userId,
+        name: entry.displayName,
+        avatar: entry.avatarUrl,
+        status: entry.status,
+        role: "member",
+        demo: false,
+      }));
     const demoRows: Row[] = demoMembers
       .filter((member) => !realIds.has(member.id))
       .slice(0, 48)
@@ -62,8 +72,8 @@ export function MembersPanel({ members, presence }: { members: RoomMemberWithPro
         role: index === 0 ? "owner" : index < 3 ? "moderator" : "member",
         demo: true,
       }));
-    return [...realRows, ...demoRows].sort((a, b) => Number(b.status !== "offline") - Number(a.status !== "offline"));
-  }, [members, demoMembers, realIds, presence]);
+    return [...realRows, ...presenceExtras, ...demoRows].sort((a, b) => Number(b.status !== "offline") - Number(a.status !== "offline"));
+  }, [members, demoMembers, realIds, presence, presenceById]);
 
   useEffect(() => {
     const current = new Map(rows.map((row) => [row.id, row.name]));
@@ -75,9 +85,10 @@ export function MembersPanel({ members, presence }: { members: RoomMemberWithPro
     const joined = [...current.entries()].filter(([id]) => !previousRef.current.has(id));
     const left = [...previousRef.current.entries()].filter(([id]) => !current.has(id));
     if (joined.length || left.length) {
+      const now = Date.now();
       const next = [
-        ...joined.map(([id, name]) => ({ id: `join-${id}-${Date.now()}`, text: `🟢 ${name} دخل الغرفة` })),
-        ...left.map(([id, name]) => ({ id: `leave-${id}-${Date.now()}`, text: `⚪ ${name} غادر الغرفة` })),
+        ...joined.map(([id, name]) => ({ id: `join-${id}-${now}`, text: `🟢 ${name} دخل الغرفة` })),
+        ...left.map(([id, name]) => ({ id: `leave-${id}-${now}`, text: `⚪ ${name} غادر الغرفة` })),
       ];
       setEvents((old) => [...next, ...old].slice(0, 5));
     }
@@ -132,35 +143,29 @@ export function MembersPanel({ members, presence }: { members: RoomMemberWithPro
     );
   };
 
+  const alertButton = (
+    <Button type="button" variant="secondary" className="h-9 justify-center gap-2 text-xs" onClick={() => void alertAdmin()} disabled={!user || !room.data}>
+      <Bell className="size-4" /> تنبيه الإدارة
+    </Button>
+  );
+
   return (
-    <aside className="glass hidden w-80 shrink-0 flex-col overflow-hidden rounded-3xl xl:flex">
-      <header className="flex items-center gap-2 border-b px-4 py-3">
-        <Users className="size-5 text-primary" aria-hidden />
-        <div className="min-w-0 flex-1">
-          <h2 className="font-display text-sm font-bold">الأعضاء</h2>
-          <p className="text-[10px] text-muted-foreground">{onlineCount} متصل الآن</p>
+    <>
+      <aside className="glass hidden w-80 shrink-0 flex-col overflow-hidden rounded-3xl xl:flex">
+        <header className="flex items-center gap-2 border-b px-4 py-3">
+          <Users className="size-5 text-primary" aria-hidden />
+          <div className="min-w-0 flex-1"><h2 className="font-display text-sm font-bold">الأعضاء</h2><p className="text-[10px] text-muted-foreground">{onlineCount} متصل الآن</p></div>
+          <Badge variant="secondary">{rows.length}</Badge>
+        </header>
+        <div className="border-b px-3 py-2">{alertButton}</div>
+        {events.length ? <div className="border-b bg-secondary/20 px-3 py-2"><p className="mb-1 text-[10px] font-semibold text-muted-foreground">آخر النشاط</p><div className="space-y-1">{events.slice(0, 3).map((event) => <p key={event.id} className="truncate text-[10px] text-muted-foreground">{event.text}</p>)}</div></div> : null}
+        <div className="flex-1 overflow-y-auto scrollbar-slim p-2.5">
+          {staff.length ? <section className="mb-3"><p className="px-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">المشرفون</p><ul className="space-y-1">{staff.map((row, index) => renderRow(row, index))}</ul></section> : null}
+          {speakers.length ? <section className="mb-3"><p className="flex items-center gap-1 px-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-emerald-400"><Mic2 className="size-3" /> على المايك الآن</p><ul className="space-y-1">{speakers.map((row, index) => renderRow(row, index))}</ul></section> : null}
+          <section><p className="px-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">الأعضاء</p><ul className="space-y-1">{regular.slice(0, 48).map((row, index) => renderRow(row, index))}</ul></section>
         </div>
-        <Badge variant="secondary">{rows.length}</Badge>
-      </header>
-
-      <div className="border-b px-3 py-2">
-        <Button type="button" variant="secondary" className="h-9 w-full justify-center gap-2 text-xs" onClick={() => void alertAdmin()} disabled={!user || !room.data}>
-          <Bell className="size-4" /> تنبيه الإدارة
-        </Button>
-      </div>
-
-      {events.length ? (
-        <div className="border-b bg-secondary/20 px-3 py-2">
-          <p className="mb-1 text-[10px] font-semibold text-muted-foreground">آخر النشاط</p>
-          <div className="space-y-1">{events.slice(0, 3).map((event) => <p key={event.id} className="truncate text-[10px] text-muted-foreground">{event.text}</p>)}</div>
-        </div>
-      ) : null}
-
-      <div className="flex-1 overflow-y-auto scrollbar-slim p-2.5">
-        {staff.length ? <section className="mb-3"><p className="px-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">المشرفون</p><ul className="space-y-1">{staff.map((row, index) => renderRow(row, index))}</ul></section> : null}
-        {speakers.length ? <section className="mb-3"><p className="flex items-center gap-1 px-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-emerald-400"><Mic2 className="size-3" /> على المايك الآن</p><ul className="space-y-1">{speakers.map((row, index) => renderRow(row, index))}</ul></section> : null}
-        <section><p className="px-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">الأعضاء</p><ul className="space-y-1">{regular.slice(0, 48).map((row, index) => renderRow(row, index))}</ul></section>
-      </div>
-    </aside>
+      </aside>
+      <div className="fixed bottom-20 end-3 z-30 xl:hidden">{alertButton}</div>
+    </>
   );
 }
