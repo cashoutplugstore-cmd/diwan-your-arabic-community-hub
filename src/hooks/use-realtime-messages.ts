@@ -7,15 +7,11 @@ import type { Message } from "@/types";
 type Handlers = {
   onInsert?: (message: Message) => void;
   onChange?: (message: Message) => void;
-  /** Current authenticated user id; demo replies are never generated for demo messages. */
-  selfUserId?: string;
-  /** Enables UI-only synthetic replies to real messages in quiet rooms. */
-  demoReplies?: boolean;
 };
 
 /**
- * Subscribes to realtime message changes for a room.
- * Demo replies are UI-only and are never persisted to Supabase.
+ * Realtime room messages plus a clearly synthetic, UI-only activity layer.
+ * Synthetic replies are never inserted into the database.
  */
 export function useRealtimeMessages(roomId: string | undefined, handlers: Handlers = {}) {
   const queryClient = useQueryClient();
@@ -24,6 +20,12 @@ export function useRealtimeMessages(roomId: string | undefined, handlers: Handle
 
   useEffect(() => {
     if (!roomId) return;
+    let selfUserId: string | undefined;
+    let disposed = false;
+    void supabase.auth.getUser().then(({ data }) => {
+      if (!disposed) selfUserId = data.user?.id;
+    });
+
     const channel = supabase
       .channel(`room-messages-${roomId}`)
       .on(
@@ -33,11 +35,14 @@ export function useRealtimeMessages(roomId: string | undefined, handlers: Handle
           const message = payload.new as Message;
           handlersRef.current.onInsert?.(message);
 
-          const { selfUserId, demoReplies } = handlersRef.current;
-          if (demoReplies && selfUserId && message.user_id === selfUserId) {
+          // If the authenticated user is the one who just spoke, add one delayed
+          // synthetic welcome/reply in the UI. This does not touch Supabase.
+          if (selfUserId && message.user_id === selfUserId) {
             const demoReply = buildDemoReply(roomId, message.content);
             if (demoReply) {
-              window.setTimeout(() => handlersRef.current.onInsert?.(demoReply), 1200);
+              window.setTimeout(() => {
+                if (!disposed) handlersRef.current.onInsert?.(demoReply);
+              }, 1200);
             }
           }
         },
@@ -55,6 +60,7 @@ export function useRealtimeMessages(roomId: string | undefined, handlers: Handle
       .subscribe();
 
     return () => {
+      disposed = true;
       supabase.removeChannel(channel);
     };
   }, [roomId, queryClient]);
