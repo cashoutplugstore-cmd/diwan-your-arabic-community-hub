@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { Crown } from "lucide-react";
 import { useI18n } from "@/contexts/i18n-context";
 import { primaryNav, secondaryNav } from "./nav-items";
 
@@ -9,12 +10,7 @@ export function Sidebar() {
     <aside className="sticky top-[73px] hidden h-[calc(100dvh-73px)] w-60 shrink-0 overflow-y-auto scrollbar-slim border-e px-3 py-5 lg:block">
       <nav className="space-y-1" aria-label={t.nav.home}>
         {primaryNav.map((item) => (
-          <Link
-            key={item.to}
-            to={item.to}
-            activeOptions={{ exact: item.to === "/" }}
-            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground data-[status=active]:bg-secondary data-[status=active]:text-foreground"
-          >
+          <Link key={item.to} to={item.to} activeOptions={{ exact: item.to === "/" }} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground data-[status=active]:bg-secondary data-[status=active]:text-foreground">
             <item.icon className="size-4 shrink-0" aria-hidden />
             <span className="truncate">{item.label(t)}</span>
           </Link>
@@ -23,13 +19,14 @@ export function Sidebar() {
 
       <div className="my-4 border-t" />
 
+      <Link to="/premium" className="mb-3 flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/10 px-3 py-3 text-sm font-bold text-primary shadow-sm transition-all hover:bg-primary/15 hover:shadow-md">
+        <Crown className="size-5 shrink-0" aria-hidden />
+        <span>VIP والاشتراكات</span>
+      </Link>
+
       <nav className="space-y-1">
-        {secondaryNav.map((item) => (
-          <Link
-            key={item.to}
-            to={item.to}
-            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground data-[status=active]:bg-secondary data-[status=active]:text-foreground"
-          >
+        {secondaryNav.filter((item) => item.to !== "/premium").map((item) => (
+          <Link key={item.to} to={item.to} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground data-[status=active]:bg-secondary data-[status=active]:text-foreground">
             <item.icon className="size-4 shrink-0" aria-hidden />
             <span className="truncate">{item.label(t)}</span>
           </Link>
@@ -38,3 +35,5 @@ export function Sidebar() {
     </aside>
   );
 }
+
+// VIP navigation is intentionally prominent and placed above profile/settings.

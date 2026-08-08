@@ -1,14 +1,4 @@
-import {
-  Bell,
-  Compass,
-  Home,
-  MessagesSquare,
-  Search,
-  Settings,
-  Shield,
-  User,
-  Users,
-} from "lucide-react";
+import { Bell, Compass, Crown, Home, MessagesSquare, Search, Settings, Shield, User, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 
@@ -23,6 +13,7 @@ export const primaryNav: NavItem[] = [
 ];
 
 export const secondaryNav: NavItem[] = [
+  { to: "/premium", label: () => "VIP والاشتراكات", icon: Crown },
   { to: "/search", label: (t) => t.nav.search, icon: Search },
   { to: "/profile", label: (t) => t.nav.profile, icon: User },
   { to: "/settings", label: (t) => t.nav.settings, icon: Settings },

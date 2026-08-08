@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { Globe, LogOut, Moon, Search, Sparkles, Sun, User } from "lucide-react";
+import { Crown, Globe, LogOut, Moon, Search, Sparkles, Sun, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -30,6 +30,11 @@ export function Navbar() {
       <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-2.5">
         <Link to="/" className="min-w-0 flex-1" aria-label={t.brand}><BrandLogo label={t.brand} /></Link>
         <Badge variant="secondary" className="hidden gap-1.5 rounded-full px-3 sm:flex"><Sparkles className="size-3.5 text-primary" /> مجتمع حي</Badge>
+        {isAuthenticated && (
+          <Button asChild size="sm" className="hidden rounded-full px-3 sm:inline-flex" aria-label="VIP والاشتراكات">
+            <Link to="/premium"><Crown className="me-1.5 size-4" /> VIP والاشتراكات</Link>
+          </Button>
+        )}
         <div className="flex shrink-0 items-center gap-1">
           <Button variant="ghost" size="icon" asChild aria-label={t.nav.search}><Link to="/search"><Search className="size-5" /></Link></Button>
           <Button variant="ghost" size="icon" onClick={() => setLocale(locale === "ar" ? "en" : "ar")} aria-label={t.common.language}><Globe className="size-5" /></Button>
@@ -38,6 +43,7 @@ export function Navbar() {
             <DropdownMenu>
               <DropdownMenuTrigger className="ms-1 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"><UserAvatar name={user?.email ?? "?"} size="sm" status="online" /></DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuItem asChild><Link to="/premium"><Crown className="size-4" /> VIP والاشتراكات</Link></DropdownMenuItem>
                 <DropdownMenuItem asChild><Link to="/profile"><User className="size-4" /> {t.nav.profile}</Link></DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}><LogOut className="size-4" /> {t.nav.logout}</DropdownMenuItem>

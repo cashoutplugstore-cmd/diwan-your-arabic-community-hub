@@ -1,0 +1,12 @@
+.diwan-vip-page { position: relative; }
+.diwan-vip-hero { background: radial-gradient(circle at 82% 18%, color-mix(in oklab, var(--primary) 26%, transparent), transparent 38%), radial-gradient(circle at 12% 90%, color-mix(in oklab, var(--accent) 20%, transparent), transparent 34%), var(--card); }
+.diwan-vip-orb { position: absolute; width: 220px; height: 220px; inset-inline-end: -80px; top: -90px; border-radius: 999px; background: color-mix(in oklab, var(--primary) 22%, transparent); filter: blur(20px); }
+.diwan-vip-card { position: relative; transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease; }
+.diwan-vip-card:hover { transform: translateY(-3px); box-shadow: 0 22px 60px -35px color-mix(in oklab, var(--primary) 65%, transparent); }
+.diwan-vip-card-featured { border-color: color-mix(in oklab, var(--primary) 52%, var(--border)); box-shadow: 0 20px 60px -38px color-mix(in oklab, var(--primary) 70%, transparent); }
+.diwan-vip-status { border-color: color-mix(in oklab, var(--success) 40%, var(--border)); }
+
+/* Premium-only hooks for chat/profile surfaces. These classes are inert until an active VIP state is rendered. */
+.diwan-vip-badge { box-shadow: 0 0 18px color-mix(in oklab, var(--primary) 45%, transparent); }
+.diwan-vip-surface { border-color: color-mix(in oklab, var(--primary) 35%, var(--border)); box-shadow: 0 16px 44px -30px color-mix(in oklab, var(--primary) 55%, transparent); }
+.diwan-vip-name { text-shadow: 0 0 18px color-mix(in oklab, var(--primary) 38%, transparent); }
