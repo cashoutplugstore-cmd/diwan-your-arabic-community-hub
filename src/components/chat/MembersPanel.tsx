@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Crown, Mic2, Users, LogIn, LogOut, Shield, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Crown, Mic2, Users, LogIn, LogOut, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/shared/UserAvatar";
@@ -17,24 +17,9 @@ function PanelContent({ members, presence, activity = [] }: Props) {
     const p = presenceById.get(member.id);
     const roleValue = String((member as Profile & { role?: string }).role ?? "").toLowerCase();
     const role: Row["role"] = roleValue.includes("owner") || roleValue.includes("admin") ? "owner" : roleValue.includes("mod") || roleValue.includes("staff") ? "staff" : "member";
-    return {
-      id: member.id,
-      name: member.display_name || member.username || "—",
-      avatar: member.avatar_url,
-      status: p?.status ?? "offline",
-      role,
-      speaking: false,
-    };
+    return { id: member.id, name: member.display_name || member.username || "—", avatar: member.avatar_url, status: p?.status ?? "offline", role, speaking: false };
   }), [members, presence]);
-
-  const extraRows = presence.filter((entry) => !members.some((member) => member.id === entry.userId)).map<Row>((entry) => ({
-    id: entry.userId,
-    name: entry.displayName,
-    avatar: entry.avatarUrl,
-    status: entry.status,
-    role: "member",
-    speaking: false,
-  }));
+  const extraRows = presence.filter((entry) => !members.some((member) => member.id === entry.userId)).map<Row>((entry) => ({ id: entry.userId, name: entry.displayName, avatar: entry.avatarUrl, status: entry.status, role: "member", speaking: false }));
   const allRows = [...rows, ...extraRows];
   const staff = allRows.filter((row) => row.role !== "member");
   const speakers = allRows.filter((row) => row.speaking);
@@ -44,7 +29,7 @@ function PanelContent({ members, presence, activity = [] }: Props) {
     <li key={row.id} className="group flex min-w-0 items-center gap-2 rounded-xl px-2 py-2 transition-colors hover:bg-secondary/60">
       <div className="relative shrink-0">
         <UserAvatar name={row.name} src={row.avatar} size="sm" status={row.status} />
-        {row.role === "owner" ? <span className="absolute -start-1 -top-1 grid size-4 place-items-center rounded-full bg-amber-400 text-black" title="الإدارة"><Crown className="size-2.5" /></span> : row.role === "staff" ? <span className="absolute -start-1 -top-1 grid size-4 place-items-center rounded-full bg-primary text-primary-foreground" title="مشرف"><Shield className="size-2.5" /></span> : null}
+        {row.role === "owner" ? <span className="absolute -start-1 -top-1 grid size-4 place-items-center rounded-full bg-amber-400 text-black" title="الإدارة"><Crown className="size-2.5" /></span> : row.role === "staff" ? <span className="absolute -start-1 -top-1 grid size-4 place-items-center rounded-full bg-primary text-primary-foreground" title="مشرف"><span className="text-[9px] font-black">م</span></span> : null}
       </div>
       <span className="min-w-0 flex-1 truncate text-xs font-medium sm:text-sm">{row.name}</span>
       {row.speaking ? <Mic2 className="size-3 shrink-0 text-emerald-400" aria-label="على المايك" /> : null}
@@ -63,51 +48,42 @@ function PanelContent({ members, presence, activity = [] }: Props) {
 export function MembersPanel(props: Props) {
   const [open, setOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches);
+  const [localActivity, setLocalActivity] = useState<PresenceActivity[]>(props.activity ?? []);
+  const previousUsers = useRef<Map<string, string>>(new Map());
   const { t } = useI18n();
 
   useEffect(() => {
+    const current = new Map(props.presence.map((entry) => [entry.userId, entry.displayName]));
+    const previous = previousUsers.current;
+    if (previous.size > 0) {
+      const now = new Date().toISOString();
+      const joins: PresenceActivity[] = [...current].filter(([id]) => !previous.has(id)).map(([id, displayName]) => ({ id: `join-${id}-${now}`, type: "join", displayName, at: now }));
+      const leaves: PresenceActivity[] = [...previous].filter(([id]) => !current.has(id)).map(([id, displayName]) => ({ id: `leave-${id}-${now}`, type: "leave", displayName, at: now }));
+      if (joins.length || leaves.length) setLocalActivity((items) => [...[...joins, ...leaves], ...items].slice(0, 8));
+    }
+    previousUsers.current = current;
+  }, [props.presence]);
+
+  useEffect(() => { if (props.activity?.length) setLocalActivity(props.activity); }, [props.activity]);
+  useEffect(() => {
     const media = window.matchMedia("(max-width: 1023px)");
     const sync = () => setIsMobile(media.matches);
-    sync();
-    media.addEventListener("change", sync);
-    return () => media.removeEventListener("change", sync);
+    sync(); media.addEventListener("change", sync); return () => media.removeEventListener("change", sync);
   }, []);
-
   useEffect(() => {
     if (!isMobile || typeof document === "undefined") return;
     const title = document.querySelector<HTMLElement>("main header h1");
     if (!title) return;
-    const previousRole = title.getAttribute("role");
-    const previousTabIndex = title.getAttribute("tabindex");
-    const previousLabel = title.getAttribute("aria-label");
-    title.setAttribute("role", "button");
-    title.setAttribute("tabindex", "0");
-    title.setAttribute("aria-label", `${title.textContent?.trim() || "الغرفة"} — ${t.chat.members}`);
-    title.classList.add("cursor-pointer", "select-none");
-    const openFromTitle = () => setOpen(true);
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setOpen(true); } };
-    title.addEventListener("click", openFromTitle);
-    title.addEventListener("keydown", onKeyDown);
+    const previousRole = title.getAttribute("role"); const previousTabIndex = title.getAttribute("tabindex"); const previousLabel = title.getAttribute("aria-label");
+    title.setAttribute("role", "button"); title.setAttribute("tabindex", "0"); title.setAttribute("aria-label", `${title.textContent?.trim() || "الغرفة"} — ${t.chat.members}`); title.classList.add("cursor-pointer", "select-none");
+    const openFromTitle = () => setOpen(true); const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setOpen(true); } };
+    title.addEventListener("click", openFromTitle); title.addEventListener("keydown", onKeyDown);
     return () => { title.removeEventListener("click", openFromTitle); title.removeEventListener("keydown", onKeyDown); if (previousRole === null) title.removeAttribute("role"); else title.setAttribute("role", previousRole); if (previousTabIndex === null) title.removeAttribute("tabindex"); else title.setAttribute("tabindex", previousTabIndex); if (previousLabel === null) title.removeAttribute("aria-label"); else title.setAttribute("aria-label", previousLabel); title.classList.remove("cursor-pointer", "select-none"); };
   }, [isMobile, t.chat.members]);
+  useEffect(() => { if (!open || typeof document === "undefined") return; const previous = document.body.style.overflow; document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = previous; }; }, [open]);
+  useEffect(() => { if (!open) return; const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); }; window.addEventListener("keydown", onKeyDown); return () => window.removeEventListener("keydown", onKeyDown); }, [open]);
 
-  useEffect(() => {
-    if (!open || typeof document === "undefined") return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = previous; };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open]);
-
-  if (isMobile) {
-    return <>{open ? <div className="fixed inset-0 z-[70]" role="presentation"><button type="button" className="absolute inset-0 bg-background/60 backdrop-blur-sm" onClick={() => setOpen(false)} aria-label="إغلاق الأعضاء" /><aside className="absolute inset-y-0 end-0 flex w-[min(88vw,22rem)] flex-col overflow-hidden border-s bg-background shadow-2xl" role="dialog" aria-modal="true" aria-label={t.chat.members}><div className="flex shrink-0 items-center justify-between border-b p-2"><span className="px-2 text-xs font-semibold text-muted-foreground">{t.chat.members}</span><Button type="button" variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="إغلاق"><X className="size-4" /></Button></div><PanelContent {...props} /></aside></div> : null}</>;
-  }
-
-  return <aside className="glass flex w-64 min-w-0 shrink-0 flex-col overflow-hidden rounded-3xl"><PanelContent {...props} /></aside>;
+  const panelProps = { ...props, activity: localActivity };
+  if (isMobile) return <>{open ? <div className="fixed inset-0 z-[70]" role="presentation"><button type="button" className="absolute inset-0 bg-background/60 backdrop-blur-sm" onClick={() => setOpen(false)} aria-label="إغلاق الأعضاء" /><aside className="absolute inset-y-0 end-0 flex w-[min(88vw,22rem)] flex-col overflow-hidden border-s bg-background shadow-2xl" role="dialog" aria-modal="true" aria-label={t.chat.members}><div className="flex shrink-0 items-center justify-between border-b p-2"><span className="px-2 text-xs font-semibold text-muted-foreground">{t.chat.members}</span><Button type="button" variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="إغلاق"><X className="size-4" /></Button></div><PanelContent {...panelProps} /></aside></div> : null}</>;
+  return <aside className="glass flex w-64 min-w-0 shrink-0 flex-col overflow-hidden rounded-3xl"><PanelContent {...panelProps} /></aside>;
 }
