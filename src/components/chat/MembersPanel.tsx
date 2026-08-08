@@ -26,11 +26,19 @@ function PanelContent({ members, presence, activity = [] }: Props) {
 
 export function MembersPanel(props: Props) {
   const [open, setOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches);
   const { t } = useI18n();
 
   useEffect(() => {
-    if (typeof document === "undefined") return;
-    // Explicit mobile trigger: only the actual room title opens the drawer.
+    const media = window.matchMedia("(max-width: 1023px)");
+    const sync = () => setIsMobile(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobile || typeof document === "undefined") return;
     const title = document.querySelector<HTMLElement>("main header h1");
     if (!title) return;
     const previousRole = title.getAttribute("role");
@@ -40,11 +48,9 @@ export function MembersPanel(props: Props) {
     title.setAttribute("tabindex", "0");
     title.setAttribute("aria-label", `${title.textContent?.trim() || "الغرفة"} — ${t.chat.members}`);
     title.classList.add("cursor-pointer", "select-none");
-    const openFromTitle = () => {
-      if (window.matchMedia("(max-width: 1023px)").matches) setOpen(true);
-    };
+    const openFromTitle = () => setOpen(true);
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.key === "Enter" || event.key === " ") && window.matchMedia("(max-width: 1023px)").matches) {
+      if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
         setOpen(true);
       }
@@ -59,12 +65,13 @@ export function MembersPanel(props: Props) {
       if (previousLabel === null) title.removeAttribute("aria-label"); else title.setAttribute("aria-label", previousLabel);
       title.classList.remove("cursor-pointer", "select-none");
     };
-  }, [t.chat.members]);
+  }, [isMobile, t.chat.members]);
 
-  return <>
-    {/* Mobile: no inline panel. It is a right-side drawer opened only from the room title. */}
-    {open ? <div className="fixed inset-0 z-[70] lg:hidden" role="presentation"><button type="button" className="absolute inset-0 bg-background/60 backdrop-blur-sm" onClick={() => setOpen(false)} aria-label="إغلاق الأعضاء" /><aside className="absolute inset-y-0 end-0 flex w-[min(84vw,21rem)] flex-col overflow-hidden border-s bg-background shadow-2xl" role="dialog" aria-modal="true" aria-label={t.chat.members}><div className="flex shrink-0 items-center justify-between border-b p-2"><span className="px-2 text-xs font-semibold text-muted-foreground">{t.chat.members}</span><Button type="button" variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="إغلاق"><X className="size-4" /></Button></div><PanelContent {...props} /></aside></div> : null}
-    {/* Desktop only: permanent right sidebar. */}
-    <aside className="glass hidden w-64 min-w-0 shrink-0 flex-col overflow-hidden rounded-3xl lg:flex"><PanelContent {...props} /></aside>
-  </>;
+  if (isMobile) {
+    return <>
+      {open ? <div className="fixed inset-0 z-[70]" role="presentation"><button type="button" className="absolute inset-0 bg-background/60 backdrop-blur-sm" onClick={() => setOpen(false)} aria-label="إغلاق الأعضاء" /><aside className="absolute inset-y-0 end-0 flex w-[min(84vw,21rem)] flex-col overflow-hidden border-s bg-background shadow-2xl" role="dialog" aria-modal="true" aria-label={t.chat.members}><div className="flex shrink-0 items-center justify-between border-b p-2"><span className="px-2 text-xs font-semibold text-muted-foreground">{t.chat.members}</span><Button type="button" variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="إغلاق"><X className="size-4" /></Button></div><PanelContent {...props} /></aside></div> : null}
+    </>;
+  }
+
+  return <aside className="glass flex w-64 min-w-0 shrink-0 flex-col overflow-hidden rounded-3xl"><PanelContent {...props} /></aside>;
 }
