@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import PremiumPage from './pages/PremiumPage';
 
 export default function App() {
@@ -12,9 +12,7 @@ export default function App() {
           </Link>
         </nav>
         <Routes>
-          {/* Existing application routes remain unchanged in the project. */}
           <Route path="/premium" element={<PremiumPage />} />
-          <Route path="*" element={<Navigate to="/premium" replace />} />
         </Routes>
       </div>
     </BrowserRouter>
