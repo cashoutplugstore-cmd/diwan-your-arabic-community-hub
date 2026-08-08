@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export type VoicePresenceEntry = {
@@ -15,6 +15,7 @@ export function useVoicePresence(
   micOn: boolean,
 ) {
   const [entries, setEntries] = useState<VoicePresenceEntry[]>([]);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   useEffect(() => {
     if (!roomId || !me) {
@@ -25,12 +26,11 @@ export function useVoicePresence(
     const channel = supabase.channel(`voice-presence:room:${roomId}`, {
       config: { presence: { key: me.userId } },
     });
+    channelRef.current = channel;
 
     const sync = () => {
       const state = channel.presenceState<VoicePresenceEntry>();
-      const flat = Object.values(state)
-        .map((list) => list[0])
-        .filter(Boolean);
+      const flat = Object.values(state).map((list) => list[0]).filter(Boolean);
       setEntries(flat);
     };
 
@@ -38,33 +38,25 @@ export function useVoicePresence(
       .on("presence", { event: "sync" }, sync)
       .on("presence", { event: "join" }, sync)
       .on("presence", { event: "leave" }, sync)
-      .subscribe(async (status) => {
-        if (status !== "SUBSCRIBED") return;
-        await channel.track({
-          userId: me.userId,
-          displayName: me.displayName,
-          avatarUrl: me.avatarUrl,
-          micOn,
-          joinedAt: new Date().toISOString(),
-        } satisfies VoicePresenceEntry);
-      });
+      .subscribe();
 
     return () => {
+      channelRef.current = null;
+      setEntries([]);
       supabase.removeChannel(channel);
     };
   }, [roomId, me?.userId, me?.displayName, me?.avatarUrl]);
 
   useEffect(() => {
-    if (!roomId || !me) return;
-    const channel = supabase.channel(`voice-presence:room:${roomId}`);
-    void channel.track({
+    if (!channelRef.current || !me) return;
+    void channelRef.current.track({
       userId: me.userId,
       displayName: me.displayName,
       avatarUrl: me.avatarUrl,
       micOn,
       joinedAt: new Date().toISOString(),
     } satisfies VoicePresenceEntry);
-  }, [roomId, me?.userId, micOn]);
+  }, [me, micOn]);
 
   return useMemo(() => ({
     entries,
