@@ -1,11 +1,12 @@
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { DEMO_MESSAGES } from "@/lib/demo-community";
 import type { MessageWithAuthor } from "@/types";
 
 export const MESSAGE_PAGE_SIZE = 40;
 export const MAX_MESSAGE_LENGTH = 2000;
 
-/** Loads a page of messages (newest first from the cursor) and hydrates authors in one extra query. */
+/** Loads a page of messages and hydrates authors. Fresh installations also receive a clearly synthetic demo feed. */
 export async function fetchMessagePage(
   roomId: string,
   before?: string | null,
@@ -21,12 +22,24 @@ export async function fetchMessagePage(
   const { data, error } = await query;
   if (error) throw error;
   const rows = (data ?? []).slice().reverse();
-  if (rows.length === 0) return [];
 
   const authorIds = [...new Set(rows.map((m) => m.user_id))];
-  const { data: profiles } = await supabase.from("profiles").select("*").in("id", authorIds);
+  const { data: profiles } = authorIds.length
+    ? await supabase.from("profiles").select("*").in("id", authorIds)
+    : { data: [] };
   const byId = new Map((profiles ?? []).map((p) => [p.id, p]));
-  return rows.map((m) => ({ ...m, author: byId.get(m.user_id) ?? null }));
+  const hydrated = rows.map((m) => ({ ...m, author: byId.get(m.user_id) ?? null }));
+
+  // Demo activity is intentionally local to the UI layer and is never written to Supabase.
+  // Only inject it on the newest page so normal pagination remains unchanged.
+  if (!before) {
+    const demo = DEMO_MESSAGES(roomId);
+    return [...demo, ...hydrated].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    );
+  }
+
+  return hydrated;
 }
 
 export async function sendMessage(input: {
