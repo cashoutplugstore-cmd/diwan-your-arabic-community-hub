@@ -42,25 +42,48 @@ export type Database = {
         Row: {
           content: string
           created_at: string
+          edited_at: string | null
           id: string
+          is_deleted: boolean
+          reply_to_id: string | null
           room_id: string
           user_id: string
         }
         Insert: {
           content: string
           created_at?: string
+          edited_at?: string | null
           id?: string
+          is_deleted?: boolean
+          reply_to_id?: string | null
           room_id: string
           user_id: string
         }
         Update: {
           content?: string
           created_at?: string
+          edited_at?: string | null
           id?: string
+          is_deleted?: boolean
+          reply_to_id?: string | null
           room_id?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "messages_reply_to_id_fkey"
+            columns: ["reply_to_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "room_stats"
+            referencedColumns: ["room_id"]
+          },
           {
             foreignKeyName: "messages_room_id_fkey"
             columns: ["room_id"]
@@ -136,6 +159,67 @@ export type Database = {
         }
         Relationships: []
       }
+      reports: {
+        Row: {
+          created_at: string
+          details: string | null
+          id: string
+          message_id: string | null
+          reason: string
+          reporter_id: string
+          room_id: string | null
+          status: string
+          target_user_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          details?: string | null
+          id?: string
+          message_id?: string | null
+          reason: string
+          reporter_id: string
+          room_id?: string | null
+          status?: string
+          target_user_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          details?: string | null
+          id?: string
+          message_id?: string | null
+          reason?: string
+          reporter_id?: string
+          room_id?: string | null
+          status?: string
+          target_user_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reports_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reports_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "room_stats"
+            referencedColumns: ["room_id"]
+          },
+          {
+            foreignKeyName: "reports_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       room_members: {
         Row: {
           id: string
@@ -163,6 +247,61 @@ export type Database = {
             foreignKeyName: "room_members_room_id_fkey"
             columns: ["room_id"]
             isOneToOne: false
+            referencedRelation: "room_stats"
+            referencedColumns: ["room_id"]
+          },
+          {
+            foreignKeyName: "room_members_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      room_moderation: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          kind: string
+          reason: string | null
+          room_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          kind: string
+          reason?: string | null
+          room_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          kind?: string
+          reason?: string | null
+          room_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_moderation_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "room_stats"
+            referencedColumns: ["room_id"]
+          },
+          {
+            foreignKeyName: "room_moderation_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
             referencedRelation: "rooms"
             referencedColumns: ["id"]
           },
@@ -170,34 +309,70 @@ export type Database = {
       }
       rooms: {
         Row: {
+          city: string | null
+          country: string | null
           created_at: string
           description: string | null
           icon: string | null
           id: string
+          is_official: boolean
           is_private: boolean
+          last_activity_at: string
           name: string
-          owner_id: string
+          owner_id: string | null
+          region: string | null
           slug: string
         }
         Insert: {
+          city?: string | null
+          country?: string | null
           created_at?: string
           description?: string | null
           icon?: string | null
           id?: string
+          is_official?: boolean
           is_private?: boolean
+          last_activity_at?: string
           name: string
-          owner_id: string
+          owner_id?: string | null
+          region?: string | null
           slug: string
         }
         Update: {
+          city?: string | null
+          country?: string | null
           created_at?: string
           description?: string | null
           icon?: string | null
           id?: string
+          is_official?: boolean
           is_private?: boolean
+          last_activity_at?: string
           name?: string
-          owner_id?: string
+          owner_id?: string | null
+          region?: string | null
           slug?: string
+        }
+        Relationships: []
+      }
+      user_blocks: {
+        Row: {
+          blocked_id: string
+          blocker_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          blocked_id: string
+          blocker_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          blocked_id?: string
+          blocker_id?: string
+          created_at?: string
+          id?: string
         }
         Relationships: []
       }
@@ -224,9 +399,33 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      room_stats: {
+        Row: {
+          last_message_at: string | null
+          member_count: number | null
+          message_count: number | null
+          room_id: string | null
+        }
+        Insert: {
+          last_message_at?: never
+          member_count?: never
+          message_count?: never
+          room_id?: string | null
+        }
+        Update: {
+          last_message_at?: never
+          member_count?: never
+          message_count?: never
+          room_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      can_moderate_room: {
+        Args: { _room_id: string; _user_id: string }
+        Returns: boolean
+      }
       can_view_room: {
         Args: { _room_id: string; _user_id: string }
         Returns: boolean
@@ -236,6 +435,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      is_restricted_in_room: {
+        Args: { _kind: string; _room_id: string; _user_id: string }
         Returns: boolean
       }
       is_room_member: {
