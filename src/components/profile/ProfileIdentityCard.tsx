@@ -6,6 +6,7 @@ type Props = {
   username?: string | null;
   avatarUrl?: string | null;
   bio?: string | null;
+  status?: string;
 };
 
 const achievements = [
@@ -15,7 +16,7 @@ const achievements = [
   { icon: Gem, label: "VIP", tone: "text-fuchsia-400" },
 ];
 
-export function ProfileIdentityCard({ name, username, avatarUrl, bio }: Props) {
+export function ProfileIdentityCard({ name, username, avatarUrl, bio, status = "متاح الآن 🟢" }: Props) {
   const xp = 680;
   const nextLevel = 1000;
   const progress = Math.round((xp / nextLevel) * 100);
@@ -41,6 +42,11 @@ export function ProfileIdentityCard({ name, username, avatarUrl, bio }: Props) {
             </span>
           </div>
           <p className="truncate text-sm text-muted-foreground" dir="ltr">@{username}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="inline-flex max-w-full items-center rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-xs font-semibold text-emerald-300">
+              {status}
+            </span>
+          </div>
           <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{bio || "جاهز للسوالف ✨"}</p>
         </div>
       </div>
