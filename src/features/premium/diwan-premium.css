@@ -1,0 +1,16 @@
+/* Diwan Premium visual system — shared identity, roles, VIP, status and room polish. */
+:root{--dw-radius:18px;--dw-glass:rgba(255,255,255,.055);--dw-border:rgba(255,255,255,.09);--dw-gold:#f5c76a;--dw-vip:#b58cff;--dw-mod:#8b9cff;--dw-admin:#f0b84b;}
+.dw-role-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border:1px solid var(--dw-border);border-radius:999px;font-size:.68rem;font-weight:700;line-height:1.3;white-space:nowrap;background:var(--dw-glass)}
+.dw-role-badge--admin{color:var(--dw-admin);box-shadow:0 0 16px rgba(240,184,75,.12)}
+.dw-role-badge--mod{color:var(--dw-mod);box-shadow:0 0 16px rgba(139,156,255,.1)}
+.dw-role-badge--vip{color:var(--dw-vip);box-shadow:0 0 18px rgba(181,140,255,.14)}
+.dw-status-dot{width:7px;height:7px;border-radius:50%;display:inline-block;background:#6ee7a0;box-shadow:0 0 8px currentColor}
+.dw-premium-card{border:1px solid var(--dw-border);border-radius:var(--dw-radius);background:var(--dw-glass);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+.dw-xp-track{height:5px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,.08)}
+.dw-xp-fill{height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--dw-vip),var(--dw-gold));transition:width .35s ease}
+.dw-message-actions{opacity:0;transform:translateY(2px);transition:opacity .18s ease,transform .18s ease}
+.dw-message:hover .dw-message-actions,.dw-message:focus-within .dw-message-actions{opacity:1;transform:none}
+.dw-reaction{display:inline-flex;align-items:center;gap:3px;border:1px solid var(--dw-border);border-radius:999px;padding:2px 7px;background:rgba(255,255,255,.035);font-size:.75rem}
+.dw-reply-preview{border-inline-start:2px solid var(--dw-vip);padding:.35rem .6rem;margin-bottom:.3rem;opacity:.78;font-size:.78rem}
+.dw-join-leave{pointer-events:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;border:1px solid var(--dw-border);border-radius:999px;padding:7px 12px;background:rgba(12,14,22,.78);backdrop-filter:blur(14px);font-size:.78rem;opacity:.92}
+@media(max-width:767px){.dw-message-actions{opacity:1;transform:none}.dw-premium-card{border-radius:14px}.dw-join-leave{max-width:82%;text-align:center}.dw-role-badge{font-size:.62rem;padding:2px 6px}}

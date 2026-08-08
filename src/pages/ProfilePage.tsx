@@ -7,10 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { ListSkeleton } from "@/components/shared/Loaders";
-import { UserAvatar } from "@/components/shared/UserAvatar";
 import { useAuth } from "@/contexts/auth-context";
 import { useI18n } from "@/contexts/i18n-context";
 import { profileQuery, updateProfile } from "@/services/profiles.service";
+import { ProfileIdentityCard } from "@/components/profile/ProfileIdentityCard";
+
+const STATUS_OPTIONS = ["متاح الآن 🟢", "مشغول 🔴", "على المايك 🎙️", "بعيد شوي 🟡"];
 
 export function ProfilePage() {
   const { t } = useI18n();
@@ -21,6 +23,7 @@ export function ProfilePage() {
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
+  const [status, setStatus] = useState("متاح الآن 🟢");
 
   useEffect(() => {
     if (profile.data) {
@@ -28,7 +31,10 @@ export function ProfilePage() {
       setBio(profile.data.bio ?? "");
       setAvatarUrl(profile.data.avatar_url ?? "");
     }
-  }, [profile.data]);
+    if (typeof window !== "undefined" && user?.id) {
+      setStatus(localStorage.getItem(`diwan-status:${user.id}`) ?? "متاح الآن 🟢");
+    }
+  }, [profile.data, user?.id]);
 
   const save = useMutation({
     mutationFn: () =>
@@ -38,6 +44,7 @@ export function ProfilePage() {
         avatar_url: avatarUrl || null,
       }),
     onSuccess: () => {
+      if (user?.id) localStorage.setItem(`diwan-status:${user.id}`, status);
       queryClient.invalidateQueries({ queryKey: ["profile", user?.id] });
       toast.success(t.common.save);
     },
@@ -50,19 +57,15 @@ export function ProfilePage() {
     <div className="space-y-6">
       <PageHeader title={t.nav.profile} description={profile.data?.username ?? ""} />
 
-      <div className="glass-strong space-y-5 rounded-3xl p-6">
-        <div className="flex items-center gap-4">
-          <UserAvatar name={displayName || profile.data?.username} src={avatarUrl} size="lg" />
-          <div className="min-w-0">
-            <p className="truncate font-display text-lg font-bold">
-              {displayName || profile.data?.username}
-            </p>
-            <p className="truncate text-sm text-muted-foreground" dir="ltr">
-              @{profile.data?.username}
-            </p>
-          </div>
-        </div>
+      <ProfileIdentityCard
+        name={displayName || profile.data?.username || "عضو ديوان"}
+        username={profile.data?.username}
+        avatarUrl={avatarUrl}
+        bio={bio}
+        status={status}
+      />
 
+      <div className="glass-strong space-y-5 rounded-3xl p-6">
         <div className="space-y-2">
           <Label htmlFor="display-name">{t.auth.displayName}</Label>
           <Input
@@ -79,6 +82,19 @@ export function ProfilePage() {
             value={avatarUrl}
             onChange={(event) => setAvatarUrl(event.target.value)}
           />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="status">الحالة</Label>
+          <select
+            id="status"
+            value={status}
+            onChange={(event) => setStatus(event.target.value)}
+            className="h-10 w-full rounded-md border border-white/10 bg-background/50 px-3 text-sm outline-none ring-offset-background focus:ring-2 focus:ring-ring"
+          >
+            {STATUS_OPTIONS.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
         </div>
         <div className="space-y-2">
           <Label htmlFor="bio">Bio</Label>
