@@ -28,18 +28,17 @@ export function getActiveDemoMembers(limit = 120): Profile[] {
   }));
 }
 
-/** Creates a UI-only, synthetic reply when a real user speaks in an otherwise quiet room. */
-export function buildDemoReply(roomId: string, realUserName: string): MessageWithAuthor | null {
+/** Creates a UI-only synthetic reply. It is never inserted into Supabase. */
+export function buildDemoReply(roomId: string, realMessage: string): MessageWithAuthor | null {
   const now = Date.now();
   const last = recentlyReplied.get(roomId) ?? 0;
-  // Prevent the demo layer from flooding a real conversation.
   if (now - last < 25_000) return null;
   recentlyReplied.set(roomId, now);
 
   const author = DEMO_PROFILES[Math.floor(Math.random() * DEMO_PROFILES.length)];
-  const content = realUserName.toLowerCase().includes("سلام")
-    ? greetings[Math.floor(Math.random() * greetings.length)]
-    : followUps[Math.floor(Math.random() * followUps.length)];
+  const isGreeting = /(^|\s)(سلام|هلا|هلو|مرحبا|هاي|hello|hi)(\s|!|！|$)/iu.test(realMessage);
+  const pool = isGreeting ? greetings : followUps;
+  const content = pool[Math.floor(Math.random() * pool.length)];
 
   return {
     id: `demo-live-${roomId}-${now}`,
