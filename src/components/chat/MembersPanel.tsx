@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Crown, Mic2, Users, LogIn, LogOut, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,9 +32,41 @@ function PanelContent({ members, presence, activity = [] }: Props) {
 export function MembersPanel(props: Props) {
   const [open, setOpen] = useState(false);
   const { t } = useI18n();
+
+  // Mobile UX: the room title is the single entry point for the members drawer.
+  // Desktop keeps the permanent right sidebar unchanged.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const title = document.querySelector<HTMLElement>("main header h1");
+    if (!title) return;
+    const previousRole = title.getAttribute("role");
+    const previousTabIndex = title.getAttribute("tabindex");
+    const previousLabel = title.getAttribute("aria-label");
+    title.setAttribute("role", "button");
+    title.setAttribute("tabindex", "0");
+    title.setAttribute("aria-label", `${title.textContent?.trim() || "الغرفة"} — ${t.chat.members}`);
+    title.classList.add("cursor-pointer", "select-none");
+    const openFromTitle = () => setOpen(true);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        setOpen(true);
+      }
+    };
+    title.addEventListener("click", openFromTitle);
+    title.addEventListener("keydown", onKeyDown);
+    return () => {
+      title.removeEventListener("click", openFromTitle);
+      title.removeEventListener("keydown", onKeyDown);
+      if (previousRole === null) title.removeAttribute("role"); else title.setAttribute("role", previousRole);
+      if (previousTabIndex === null) title.removeAttribute("tabindex"); else title.setAttribute("tabindex", previousTabIndex);
+      if (previousLabel === null) title.removeAttribute("aria-label"); else title.setAttribute("aria-label", previousLabel);
+      title.classList.remove("cursor-pointer", "select-none");
+    };
+  }, [t.chat.members]);
+
   return <>
-    <Button type="button" variant="secondary" size="sm" className="fixed end-3 top-[calc(env(safe-area-inset-top)+5rem)] z-40 gap-1.5 rounded-full shadow-lg lg:hidden" onClick={() => setOpen(true)} aria-label={t.chat.members}><Users className="size-4" /><span>الأعضاء</span></Button>
-    {open ? <div className="fixed inset-0 z-50 bg-background/60 backdrop-blur-sm lg:hidden" onClick={() => setOpen(false)} aria-hidden="true"><aside className="absolute end-0 top-0 flex h-full w-[min(82vw,20rem)] flex-col overflow-hidden border-s bg-background shadow-2xl" onClick={(event) => event.stopPropagation()}><div className="flex items-center justify-end border-b p-2"><Button type="button" variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="إغلاق"><X className="size-4" /></Button></div><PanelContent {...props} /></aside></div> : null}
+    {open ? <div className="fixed inset-0 z-50 bg-background/60 backdrop-blur-sm lg:hidden" onClick={() => setOpen(false)} aria-hidden="true"><aside className="absolute end-0 top-0 flex h-full w-[min(82vw,20rem)] flex-col overflow-hidden border-s bg-background shadow-2xl" onClick={(event) => event.stopPropagation()}><div className="flex items-center justify-between border-b p-2"><span className="px-2 text-xs font-semibold text-muted-foreground">{t.chat.members}</span><Button type="button" variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="إغلاق"><X className="size-4" /></Button></div><PanelContent {...props} /></aside></div> : null}
     <aside className="glass hidden w-64 min-w-0 shrink-0 flex-col overflow-hidden rounded-3xl lg:flex"><PanelContent {...props} /></aside>
   </>;
 }
