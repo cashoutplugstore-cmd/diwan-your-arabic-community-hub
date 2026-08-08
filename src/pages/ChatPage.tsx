@@ -315,7 +315,7 @@ export function ChatRoomPage({ slug }: { slug: string }) {
 
   return (
     <div className="flex gap-4">
-      <div className="glass-strong flex h-[calc(100dvh-190px)] min-w-0 flex-1 flex-col overflow-hidden rounded-3xl lg:h-[calc(100dvh-140px)]">
+      <div className="glass-strong flex h-[calc(100dvh-150px)] min-w-0 flex-1 flex-col overflow-hidden rounded-3xl lg:h-[calc(100dvh-140px)]">
         <header className="flex min-w-0 items-center gap-3 border-b px-4 py-3">
           <UserAvatar name={room.data.name} size="sm" />
           <div className="min-w-0 flex-1">
@@ -379,8 +379,7 @@ export function ChatRoomPage({ slug }: { slug: string }) {
       <MembersPanel members={members.data ?? []} presence={presence.entries} />
 
       <AlertDialog open={Boolean(pendingDelete)} onOpenChange={(open) => !open && setPendingDelete(null)}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{t.chat.confirmDelete}</AlertDialogTitle><AlertDialogDescription>{t.chat.confirmDeleteDesc}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>{t.common.cancel}</AlertDialogCancel><AlertDialogAction onClick={() => pendingDelete && removeMessage.mutate(pendingDelete.id)}>{t.chat.delete}</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
-      </AlertDialog>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{t.chat.confirmDelete}</AlertDialogTitle><AlertDialogDescription>{t.chat.confirmDeleteDesc}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>{t.common.cancel}</AlertDialogCancel><AlertDialogAction onClick={() => pendingDelete && removeMessage.mutate(pendingDelete.id)}>{t.chat.delete}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>
   );
 }
