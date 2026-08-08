@@ -7,10 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { ListSkeleton } from "@/components/shared/Loaders";
-import { UserAvatar } from "@/components/shared/UserAvatar";
 import { useAuth } from "@/contexts/auth-context";
 import { useI18n } from "@/contexts/i18n-context";
 import { profileQuery, updateProfile } from "@/services/profiles.service";
+import { ProfileIdentityCard } from "@/components/profile/ProfileIdentityCard";
 
 export function ProfilePage() {
   const { t } = useI18n();
@@ -50,19 +50,14 @@ export function ProfilePage() {
     <div className="space-y-6">
       <PageHeader title={t.nav.profile} description={profile.data?.username ?? ""} />
 
-      <div className="glass-strong space-y-5 rounded-3xl p-6">
-        <div className="flex items-center gap-4">
-          <UserAvatar name={displayName || profile.data?.username} src={avatarUrl} size="lg" />
-          <div className="min-w-0">
-            <p className="truncate font-display text-lg font-bold">
-              {displayName || profile.data?.username}
-            </p>
-            <p className="truncate text-sm text-muted-foreground" dir="ltr">
-              @{profile.data?.username}
-            </p>
-          </div>
-        </div>
+      <ProfileIdentityCard
+        name={displayName || profile.data?.username || "عضو ديوان"}
+        username={profile.data?.username}
+        avatarUrl={avatarUrl}
+        bio={bio}
+      />
 
+      <div className="glass-strong space-y-5 rounded-3xl p-6">
         <div className="space-y-2">
           <Label htmlFor="display-name">{t.auth.displayName}</Label>
           <Input
