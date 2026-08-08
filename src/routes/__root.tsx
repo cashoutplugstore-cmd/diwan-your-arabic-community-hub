@@ -43,34 +43,48 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
+
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
+
+    // Deployments can invalidate an old lazy-loaded JS chunk while the user
+    // still has the previous app shell open. Recover once automatically so the
+    // user does not have to manually refresh the page.
+    const message = String(error?.message ?? "").toLowerCase();
+    const isChunkError = /chunk|dynamically imported module|importing a module script|failed to fetch/.test(message);
+    if (!isChunkError) return;
+
+    const reloadKey = "diwan:auto-reload-after-chunk-error";
+    if (sessionStorage.getItem(reloadKey) === "1") return;
+    sessionStorage.setItem(reloadKey, "1");
+    window.location.reload();
   }, [error]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          This page didn't load
+          تعذر تحميل الصفحة
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
+          صار خطأ مؤقت. نحاول إصلاح الاتصال تلقائيًا، وإذا استمر الخطأ يمكنك المحاولة مرة ثانية.
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {
+              sessionStorage.removeItem("diwan:auto-reload-after-chunk-error");
               router.invalidate();
               reset();
             }}
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            Try again
+            حاول مرة ثانية
           </button>
           <a
             href="/"
-            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-accent"
           >
-            Go home
+            الرئيسية
           </a>
         </div>
       </div>
@@ -149,9 +163,8 @@ function RootComponent() {
         <I18nProvider>
           <AuthProvider>
             <SoundProvider>
-            {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-            <Outlet />
-            <Toaster position="top-center" richColors />
+              <Outlet />
+              <Toaster position="top-center" richColors />
             </SoundProvider>
           </AuthProvider>
         </I18nProvider>
