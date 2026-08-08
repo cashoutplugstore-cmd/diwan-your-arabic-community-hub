@@ -51,10 +51,7 @@ export function MembersPanel({ members, presence }: { members: RoomMemberWithPro
     const left = [...previousRef.current.entries()].filter(([id]) => !current.has(id));
     if (joined.length || left.length) {
       const now = Date.now();
-      const next = [
-        ...joined.map(([id, name]) => ({ id: `join-${id}-${now}`, text: `🟢 ${name} دخل الغرفة` })),
-        ...left.map(([id, name]) => ({ id: `leave-${id}-${now}`, text: `⚪ ${name} غادر الغرفة` })),
-      ];
+      const next = [...joined.map(([id, name]) => ({ id: `join-${id}-${now}`, text: `🟢 ${name} دخل الغرفة` })), ...left.map(([id, name]) => ({ id: `leave-${id}-${now}`, text: `⚪ ${name} غادر الغرفة` }))];
       setEvents((old) => [...next, ...old].slice(0, 5));
     }
     previousRef.current = current;
@@ -80,6 +77,7 @@ export function MembersPanel({ members, presence }: { members: RoomMemberWithPro
     const isOwner = row.role === "owner";
     const isAdmin = row.role === "admin";
     const isModerator = row.role === "moderator";
+    const roleColor = isOwner ? "text-amber-400" : isAdmin ? "text-red-400" : isModerator ? "text-violet-400" : isSpeaker ? "text-emerald-400" : colorFor(row.id);
     return (
       <li key={row.id} className="group flex items-center gap-2 rounded-xl px-2.5 py-2 transition-colors hover:bg-secondary/60">
         <div className="relative">
@@ -89,9 +87,9 @@ export function MembersPanel({ members, presence }: { members: RoomMemberWithPro
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1">
-            <span className={`truncate text-sm font-semibold ${colorFor(row.id)}`}>{row.name || "—"}</span>
+            <span className={`truncate text-sm font-semibold ${roleColor}`}>{row.name || "—"}</span>
             {isSpeaker ? <Mic2 className="size-3 shrink-0 text-emerald-400" aria-label="صاعد المايك" /> : null}
-            {isOwner ? <Star className="size-3 shrink-0 text-amber-400" aria-label="مالك الغرفة" /> : null}
+            {isOwner || isModerator ? <Star className={`size-3 shrink-0 ${isOwner ? "text-amber-400" : "text-violet-400"}`} aria-label={isOwner ? "مالك الغرفة" : "مشرف"} /> : null}
           </div>
           <div className="flex items-center gap-1 text-[10px] text-muted-foreground">{isOwner ? "مالك الغرفة" : isAdmin ? "إدارة" : isModerator ? "مشرف" : isSpeaker ? "صاعد المايك" : row.status === "online" ? "نشط الآن" : row.status === "away" ? "خامل" : "غير متصل"}</div>
         </div>
