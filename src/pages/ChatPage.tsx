@@ -64,7 +64,6 @@ import { profileQuery } from "@/services/profiles.service";
 import { myRolesQuery } from "@/services/roles.service";
 import {
   blockUser,
-  liftRestriction,
   myBlocksQuery,
   restrictInRoom,
   roomRestrictionsQuery,
@@ -707,4 +706,3 @@ export function ChatRoomPage({ slug }: { slug: string }) {
   );
 }
 
-export { liftRestriction };

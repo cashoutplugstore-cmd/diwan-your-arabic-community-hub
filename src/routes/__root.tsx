@@ -15,6 +15,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/contexts/auth-context";
 import { I18nProvider } from "@/contexts/i18n-context";
 import { ThemeProvider } from "@/contexts/theme-context";
+import { SoundProvider } from "@/contexts/sound-context";
 import { supabase } from "@/integrations/supabase/client";
 
 function NotFoundComponent() {
@@ -147,9 +148,11 @@ function RootComponent() {
       <ThemeProvider>
         <I18nProvider>
           <AuthProvider>
+            <SoundProvider>
             {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
             <Outlet />
             <Toaster position="top-center" richColors />
+            </SoundProvider>
           </AuthProvider>
         </I18nProvider>
       </ThemeProvider>
