@@ -67,3 +67,48 @@ export const supabaseAdmin = new Proxy({} as ReturnType<typeof createSupabaseAdm
     return Reflect.get(_supabaseAdmin, prop, receiver);
   },
 });
+
+/**
+ * Minimal server-only OpenAI client helper.
+ * SECURITY: OPENAI_API_KEY is read only from the server environment.
+ * Never expose this value through VITE_* variables or browser code.
+ */
+export async function createOpenAIResponse(input: {
+  userText: string;
+  systemText?: string;
+  model?: string;
+}): Promise<string> {
+  const apiKey = process.env['OPENAI_API_KEY'];
+
+  if (!apiKey) {
+    throw new Error('Missing OPENAI_API_KEY server environment variable.');
+  }
+
+  const model = input.model || process.env['OPENAI_MODEL'] || 'gpt-5-mini';
+  const instructions = input.systemText || 'You are Diwan AI, a helpful Arabic-first assistant.';
+
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      instructions,
+      input: input.userText,
+    }),
+  });
+
+  if (!response.ok) {
+    const details = await response.text();
+    console.error(`[OpenAI] Request failed (${response.status}): ${details}`);
+    throw new Error(`OpenAI request failed with status ${response.status}.`);
+  }
+
+  const data = (await response.json()) as {
+    output_text?: string;
+  };
+
+  return data.output_text || '';
+}
