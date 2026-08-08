@@ -68,19 +68,21 @@ export const DEMO_PROFILES: Profile[] = (() => {
     for (const family of familyNames.slice(0, 3)) {
       const displayName = `${first} ${family}`;
       result.push(profile(id++, displayName, `demo_${id - 1}`));
-      if (result.length >= 90) return result;
+      if (result.length >= 90) break;
     }
+    if (result.length >= 90) break;
   }
   for (const first of maleFirstNames) {
     for (const family of familyNames.slice(0, 3)) {
       const displayName = `${first} ${family}`;
       result.push(profile(id++, displayName, `demo_${id - 1}`));
-      if (result.length >= 100) return result;
+      if (result.length >= 105) break;
     }
+    if (result.length >= 105) break;
   }
   for (const first of englishNames) {
     result.push(profile(id++, first, `demo_${id - 1}`));
-    if (result.length >= 120) return result;
+    if (result.length >= 120) break;
   }
   return result;
 })();
