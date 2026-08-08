@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { buildDemoReply } from "@/lib/demo-activity";
+import { buildDemoReply, buildDemoAmbientMessage } from "@/lib/demo-activity";
 import type { Message } from "@/types";
 
 type Handlers = {
@@ -10,8 +10,8 @@ type Handlers = {
 };
 
 /**
- * Realtime room messages plus a clearly synthetic, UI-only activity layer.
- * Synthetic replies are never inserted into the database.
+ * Realtime room messages plus a lightweight, clearly synthetic UI activity layer.
+ * Synthetic activity is never inserted into Supabase and is throttled for mobile performance.
  */
 export function useRealtimeMessages(roomId: string | undefined, handlers: Handlers = {}) {
   const queryClient = useQueryClient();
@@ -22,9 +22,22 @@ export function useRealtimeMessages(roomId: string | undefined, handlers: Handle
     if (!roomId) return;
     let selfUserId: string | undefined;
     let disposed = false;
+    let ambientTimer: number | undefined;
+
     void supabase.auth.getUser().then(({ data }) => {
       if (!disposed) selfUserId = data.user?.id;
     });
+
+    const emitAmbient = () => {
+      if (disposed || document.visibilityState !== "visible") return;
+      const message = buildDemoAmbientMessage(roomId);
+      if (message) handlersRef.current.onInsert?.(message as Message);
+      // Natural gaps: activity is intermittent, not a message every second.
+      ambientTimer = window.setTimeout(emitAmbient, 12_000 + Math.floor(Math.random() * 24_000));
+    };
+
+    // Give a fresh room a moment before its first synthetic activity.
+    ambientTimer = window.setTimeout(emitAmbient, 8_000 + Math.floor(Math.random() * 12_000));
 
     const channel = supabase
       .channel(`room-messages-${roomId}`)
@@ -35,13 +48,11 @@ export function useRealtimeMessages(roomId: string | undefined, handlers: Handle
           const message = payload.new as Message;
           handlersRef.current.onInsert?.(message);
 
-          // If the authenticated user is the one who just spoke, add one delayed
-          // synthetic welcome/reply in the UI. This does not touch Supabase.
           if (selfUserId && message.user_id === selfUserId) {
             const demoReply = buildDemoReply(roomId, message.content);
             if (demoReply) {
               window.setTimeout(() => {
-                if (!disposed) handlersRef.current.onInsert?.(demoReply);
+                if (!disposed) handlersRef.current.onInsert?.(demoReply as Message);
               }, 1200);
             }
           }
@@ -61,6 +72,7 @@ export function useRealtimeMessages(roomId: string | undefined, handlers: Handle
 
     return () => {
       disposed = true;
+      if (ambientTimer) window.clearTimeout(ambientTimer);
       supabase.removeChannel(channel);
     };
   }, [roomId, queryClient]);
