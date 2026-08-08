@@ -1,51 +1,76 @@
 import { useEffect, useRef, useState } from "react";
 import { Headphones, Mic, MicOff, Music2, PhoneOff, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/auth-context";
+import { profileQuery } from "@/services/profiles.service";
+import { roomQuery } from "@/services/rooms.service";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 
-/** Compact room-scoped local microphone controls. Audio transport is intentionally separate from presence. */
-export function VoiceRoomDock({
-  roomName,
-  onMicChange,
-}: {
-  roomName?: string;
-  onMicChange?: (micOn: boolean) => void;
-}) {
+function currentRoomSlug() {
+  return decodeURIComponent(window.location.pathname.split("/").filter(Boolean).pop() ?? "");
+}
+
+/** Compact room-scoped microphone controls plus room-only voice presence. */
+export function VoiceRoomDock({ roomName }: { roomName?: string }) {
+  const { user } = useAuth();
   const [micOn, setMicOn] = useState(false);
   const [speakerOn, setSpeakerOn] = useState(true);
   const [mediaName, setMediaName] = useState<string | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const voiceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const roomSlug = currentRoomSlug();
+  const room = useQuery(roomQuery(roomSlug));
+  const profile = useQuery(profileQuery(user?.id));
+
+  useEffect(() => {
+    const roomId = room.data?.id;
+    if (!roomId || !user) return;
+    const channel = supabase.channel(`voice-presence:room:${roomId}`, { config: { presence: { key: user.id } } });
+    voiceChannelRef.current = channel;
+    channel.subscribe();
+    return () => {
+      voiceChannelRef.current = null;
+      supabase.removeChannel(channel);
+    };
+  }, [room.data?.id, user?.id]);
+
+  useEffect(() => {
+    if (!voiceChannelRef.current || !user) return;
+    void voiceChannelRef.current.track({
+      userId: user.id,
+      displayName: profile.data?.display_name || profile.data?.username || "عضو",
+      avatarUrl: profile.data?.avatar_url ?? null,
+      micOn,
+      joinedAt: new Date().toISOString(),
+    });
+  }, [micOn, user, profile.data?.display_name, profile.data?.username, profile.data?.avatar_url]);
 
   useEffect(() => () => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
   }, []);
 
-  function setMic(value: boolean) {
-    setMicOn(value);
-    onMicChange?.(value);
-  }
-
   async function toggleMic() {
     if (micOn) {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
-      setMic(false);
+      setMicOn(false);
       return;
     }
-
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      setMic(true);
+      setMicOn(true);
     } catch {
-      setMic(false);
+      setMicOn(false);
     }
   }
 
   function leaveVoice() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
-    setMic(false);
+    setMicOn(false);
   }
 
   return (
@@ -53,11 +78,8 @@ export function VoiceRoomDock({
       <div className="flex items-center gap-2">
         <div className="hidden min-w-0 flex-1 sm:block">
           <p className="truncate text-xs font-semibold">الصوت · {roomName ?? "الغرفة"}</p>
-          <p className="truncate text-[10px] text-muted-foreground">
-            {micOn ? "أنت صاعد المايك في هذه الغرفة" : "صعود المايك يظهر بجانب اسمك للأعضاء"}
-          </p>
+          <p className="truncate text-[10px] text-muted-foreground">{micOn ? "أنت صاعد المايك في هذه الغرفة" : "صعود المايك يظهر بجانب اسمك للأعضاء"}</p>
         </div>
-
         <Button type="button" size="sm" variant={micOn ? "default" : "secondary"} className="h-10 flex-1 rounded-xl sm:flex-none" onClick={() => void toggleMic()}>
           {micOn ? <Mic className="size-4" /> : <MicOff className="size-4" />}
           <span>{micOn ? "المايك شغال" : "صعود المايك"}</span>
