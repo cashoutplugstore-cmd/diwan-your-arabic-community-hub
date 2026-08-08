@@ -35,3 +35,5 @@ export function Sidebar() {
     </aside>
   );
 }
+
+// VIP navigation is intentionally prominent and placed above profile/settings.
