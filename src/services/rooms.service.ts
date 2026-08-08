@@ -1,14 +1,78 @@
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { Room, RoomMember } from "@/types";
+import type { CountryNode, Profile, RegionNode, Room, RoomMember, RoomWithStats } from "@/types";
 
 export async function fetchRooms(): Promise<Room[]> {
   const { data, error } = await supabase
     .from("rooms")
     .select("*")
-    .order("created_at", { ascending: false });
+    .order("last_activity_at", { ascending: false });
   if (error) throw error;
   return data ?? [];
+}
+
+/** Rooms joined with their real stats (member / message counts) in two queries — no N+1. */
+export async function fetchRoomsWithStats(): Promise<RoomWithStats[]> {
+  const [roomsRes, statsRes] = await Promise.all([
+    supabase.from("rooms").select("*").order("last_activity_at", { ascending: false }),
+    supabase.from("room_stats").select("*"),
+  ]);
+  if (roomsRes.error) throw roomsRes.error;
+  if (statsRes.error) throw statsRes.error;
+  const stats = new Map((statsRes.data ?? []).map((s) => [s.room_id, s]));
+  return (roomsRes.data ?? []).map((room) => {
+    const s = stats.get(room.id);
+    return {
+      ...room,
+      member_count: Number(s?.member_count ?? 0),
+      message_count: Number(s?.message_count ?? 0),
+      last_message_at: s?.last_message_at ?? null,
+    };
+  });
+}
+
+/** Groups public rooms into region → country → city using real data only. */
+export function buildCommunityTree(rooms: RoomWithStats[]): RegionNode[] {
+  const regions: RegionNode[] = [];
+  for (const region of ["arab", "europe"] as const) {
+    const scoped = rooms.filter((r) => r.region === region && !r.is_private);
+    if (scoped.length === 0) continue;
+    const byCountry = new Map<string, CountryNode>();
+    for (const room of scoped) {
+      const country = room.country ?? "—";
+      const node =
+        byCountry.get(country) ?? { country, cities: [], member_count: 0, message_count: 0 };
+      node.cities.push(room);
+      node.member_count += room.member_count;
+      node.message_count += room.message_count;
+      byCountry.set(country, node);
+    }
+    const countries = [...byCountry.values()].sort((a, b) => b.message_count - a.message_count);
+    regions.push({
+      region,
+      countries,
+      room_count: scoped.length,
+      member_count: countries.reduce((sum, c) => sum + c.member_count, 0),
+    });
+  }
+  return regions;
+}
+
+export async function fetchRoomMembers(roomId: string): Promise<Profile[]> {
+  const { data, error } = await supabase
+    .from("room_members")
+    .select("user_id")
+    .eq("room_id", roomId)
+    .limit(200);
+  if (error) throw error;
+  const ids = (data ?? []).map((m) => m.user_id);
+  if (ids.length === 0) return [];
+  const { data: profiles, error: profilesError } = await supabase
+    .from("profiles")
+    .select("*")
+    .in("id", ids);
+  if (profilesError) throw profilesError;
+  return profiles ?? [];
 }
 
 export async function fetchRoomBySlug(slug: string): Promise<Room | null> {
@@ -66,6 +130,16 @@ export async function leaveRoom(roomId: string, userId: string) {
 }
 
 export const roomsQuery = () => queryOptions({ queryKey: ["rooms"], queryFn: fetchRooms });
+
+export const roomsWithStatsQuery = () =>
+  queryOptions({ queryKey: ["rooms", "stats"], queryFn: fetchRoomsWithStats, staleTime: 30_000 });
+
+export const roomMembersQuery = (roomId: string | undefined) =>
+  queryOptions({
+    queryKey: ["room_members", "profiles", roomId],
+    queryFn: () => fetchRoomMembers(roomId!),
+    enabled: Boolean(roomId),
+  });
 
 export const roomQuery = (slug: string) =>
   queryOptions({ queryKey: ["rooms", slug], queryFn: () => fetchRoomBySlug(slug) });
