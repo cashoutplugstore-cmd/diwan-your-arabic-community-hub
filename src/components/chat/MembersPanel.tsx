@@ -19,6 +19,7 @@ const colorFor = (id: string) => nameColors[[...id].reduce((n, c) => n + c.charC
 type Row = { id: string; name: string; avatar: string | null; status: "online" | "away" | "offline"; role: string; demo: boolean };
 
 function roomSlugFromUrl() {
+  if (typeof window === "undefined") return "";
   return decodeURIComponent(window.location.pathname.split("/").filter(Boolean).pop() ?? "");
 }
 
