@@ -22,7 +22,8 @@ export function useVoiceParticipants(roomId: string | undefined) {
     const channel = supabase.channel(`voice-presence:room:${roomId}`);
     const sync = () => {
       const state = channel.presenceState<VoicePresenceEntry>();
-      setEntries(Object.values(state).map((list) => list[0]).filter(Boolean));
+      const values = Object.values(state).map((list) => list[0]).filter((entry): entry is VoicePresenceEntry => Boolean(entry));
+      setEntries(values);
     };
 
     channel
