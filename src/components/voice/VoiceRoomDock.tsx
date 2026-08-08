@@ -1,67 +1,116 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Headphones, Mic, MicOff, Music2, PhoneOff, Radio, Users, Volume2, Waves } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Headphones, Mic, MicOff, Music2, PhoneOff, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 
-/** Room-scoped voice UI. It only appears inside /chat/:room and never on other pages. */
+/**
+ * Compact room-scoped voice controls.
+ * Intentionally rendered inside the chat composer so it can never cover messages or the keyboard.
+ * This is the local microphone UI; real multi-user WebRTC signaling is a separate layer.
+ */
 export function VoiceRoomDock({ roomName }: { roomName?: string }) {
-  const [open, setOpen] = useState(false);
   const [micOn, setMicOn] = useState(false);
   const [speakerOn, setSpeakerOn] = useState(true);
   const [mediaName, setMediaName] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const isChatRoute = useMemo(() => typeof window !== "undefined" && window.location.pathname.startsWith("/chat/"), []);
+  const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     return () => {
-      audioRef.current?.pause();
-      setMicOn(false);
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
     };
   }, []);
 
-  if (!isChatRoute) return null;
+  async function toggleMic() {
+    if (micOn) {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      setMicOn(false);
+      return;
+    }
 
-  if (!open) {
-    return (
-      <Button className="fixed bottom-20 end-4 z-50 rounded-full shadow-xl lg:bottom-6" onClick={() => setOpen(true)}>
-        <Radio className="size-4" />
-        صعود المايك
-      </Button>
-    );
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      setMicOn(true);
+    } catch {
+      setMicOn(false);
+    }
+  }
+
+  function leaveVoice() {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    setMicOn(false);
   }
 
   return (
-    <section className="glass-strong fixed bottom-20 end-4 z-50 w-[min(94vw,420px)] overflow-hidden rounded-[28px] border shadow-2xl lg:bottom-6">
-      <header className="relative overflow-hidden border-b px-4 py-4">
-        <div className="absolute inset-0 bg-gradient-to-r from-primary/15 via-transparent to-violet-500/10" />
-        <div className="relative flex items-center gap-3">
-          <div className="grid size-11 place-items-center rounded-2xl bg-primary/15 text-primary ring-1 ring-primary/20"><Waves className="size-5" /></div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">Voice Room</p>
-            <p className="truncate font-display font-bold">{roomName ?? "الغرفة الحالية"}</p>
-            <p className="text-xs text-muted-foreground">صوت هذه الغرفة فقط</p>
-          </div>
-          <Badge variant="secondary" className="rounded-full"><Users className="me-1 size-3" /> مباشر</Badge>
+    <div className="border-t bg-background/80 px-3 py-2 backdrop-blur-sm">
+      <div className="flex items-center gap-2">
+        <div className="hidden min-w-0 flex-1 sm:block">
+          <p className="truncate text-xs font-semibold">الصوت · {roomName ?? "الغرفة"}</p>
+          <p className="truncate text-[10px] text-muted-foreground">
+            {micOn ? "الميكروفون شغال في هذه الغرفة" : "ارفع المايك وتكلم مع الموجودين"}
+          </p>
         </div>
-      </header>
-      <div className="space-y-3 p-4">
-        <div className="flex items-center gap-3 rounded-2xl border bg-secondary/30 p-3">
-          <div className="grid size-10 place-items-center rounded-full bg-primary/15 text-primary"><Headphones className="size-5" /></div>
-          <div className="min-w-0 flex-1"><p className="text-sm font-semibold">الروم الصوتي</p><p className="text-xs text-muted-foreground">الميكروفون مرتبط بالغرفة الحالية فقط</p></div>
-          <span className="size-2 rounded-full bg-emerald-400 shadow-[0_0_12px_currentColor]" />
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant={micOn ? "default" : "secondary"} className="h-11 rounded-2xl" onClick={() => setMicOn((v) => !v)}>{micOn ? <Mic className="size-4" /> : <MicOff className="size-4" />}{micOn ? "المايك شغال" : "ارفع المايك"}</Button>
-          <Button variant={speakerOn ? "secondary" : "outline"} className="h-11 rounded-2xl" onClick={() => setSpeakerOn((v) => !v)}><Volume2 className="size-4" />{speakerOn ? "الصوت شغال" : "الصوت مكتوم"}</Button>
-        </div>
-        <label className="flex cursor-pointer items-center gap-3 rounded-2xl border p-3 transition-colors hover:bg-secondary/50">
-          <Music2 className="size-5 text-primary" />
-          <span className="min-w-0 flex-1"><span className="block text-sm font-medium">مشغل الموسيقى</span><span className="block truncate text-xs text-muted-foreground">اختَر ملفًا صوتيًا من جهازك</span></span>
-          <input className="sr-only" type="file" accept="audio/*" onChange={(event) => setMediaName(event.target.files?.[0]?.name ?? null)} />
+
+        <Button
+          type="button"
+          size="sm"
+          variant={micOn ? "default" : "secondary"}
+          className="h-10 flex-1 rounded-xl sm:flex-none"
+          onClick={() => void toggleMic()}
+          title={micOn ? "إيقاف المايك" : "صعود المايك"}
+        >
+          {micOn ? <Mic className="size-4" /> : <MicOff className="size-4" />}
+          <span>{micOn ? "المايك شغال" : "صعود المايك"}</span>
+        </Button>
+
+        <Button
+          type="button"
+          size="icon"
+          variant="secondary"
+          className="size-10 shrink-0 rounded-xl"
+          onClick={() => setSpeakerOn((value) => !value)}
+          title={speakerOn ? "كتم الصوت" : "تشغيل الصوت"}
+          aria-label={speakerOn ? "كتم الصوت" : "تشغيل الصوت"}
+        >
+          {speakerOn ? <Volume2 className="size-4" /> : <Headphones className="size-4" />}
+        </Button>
+
+        <label
+          className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-xl border bg-secondary text-muted-foreground transition-colors hover:bg-secondary/80"
+          title="اختيار موسيقى من الجهاز"
+        >
+          <Music2 className="size-4" />
+          <input
+            className="sr-only"
+            type="file"
+            accept="audio/*"
+            onChange={(event) => setMediaName(event.target.files?.[0]?.name ?? null)}
+          />
         </label>
-        {mediaName ? <div className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-xs"><Music2 className="size-3 text-primary" /><span className="truncate">{mediaName}</span></div> : null}
-        <Button variant="destructive" className="h-11 w-full rounded-2xl" onClick={() => { setMicOn(false); setOpen(false); }}><PhoneOff className="size-4" /> مغادرة الروم الصوتي</Button>
+
+        {micOn ? (
+          <Button
+            type="button"
+            size="icon"
+            variant="destructive"
+            className="size-10 shrink-0 rounded-xl"
+            onClick={leaveVoice}
+            title="مغادرة المايك"
+            aria-label="مغادرة المايك"
+          >
+            <PhoneOff className="size-4" />
+          </Button>
+        ) : null}
       </div>
-    </section>
+
+      {mediaName ? (
+        <div className="mt-2 flex items-center gap-2 rounded-lg bg-primary/10 px-2.5 py-1.5 text-[11px]">
+          <Music2 className="size-3 text-primary" />
+          <span className="min-w-0 truncate">{mediaName}</span>
+        </div>
+      ) : null}
+    </div>
   );
 }
