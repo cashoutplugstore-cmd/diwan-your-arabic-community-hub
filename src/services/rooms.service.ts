@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { CountryNode, Profile, RegionNode, Room, RoomMember, RoomWithStats } from "@/types";
+import type { CountryNode, Profile, RegionNode, Room, RoomMember, RoomMemberWithProfile, RoomWithStats } from "@/types";
 
 export async function fetchRooms(): Promise<Room[]> {
   const { data, error } = await supabase
@@ -58,21 +58,26 @@ export function buildCommunityTree(rooms: RoomWithStats[]): RegionNode[] {
   return regions;
 }
 
-export async function fetchRoomMembers(roomId: string): Promise<Profile[]> {
+export async function fetchRoomMembers(roomId: string): Promise<RoomMemberWithProfile[]> {
   const { data, error } = await supabase
     .from("room_members")
-    .select("user_id")
+    .select("user_id, role")
     .eq("room_id", roomId)
     .limit(200);
   if (error) throw error;
-  const ids = (data ?? []).map((m) => m.user_id);
-  if (ids.length === 0) return [];
+  const rows = data ?? [];
+  if (rows.length === 0) return [];
+  const ids = rows.map((m) => m.user_id);
   const { data: profiles, error: profilesError } = await supabase
     .from("profiles")
     .select("*")
     .in("id", ids);
   if (profilesError) throw profilesError;
-  return profiles ?? [];
+  const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
+  return rows.flatMap((member) => {
+    const profile = profileById.get(member.user_id);
+    return profile ? [{ ...profile, room_role: member.role }] : [];
+  });
 }
 
 export async function fetchRoomBySlug(slug: string): Promise<Room | null> {
