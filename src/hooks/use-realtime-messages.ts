@@ -32,9 +32,11 @@ export function useRealtimeMessages(roomId: string | undefined, handlers: Handle
       if (disposed || document.visibilityState !== "visible") return;
       const message = buildDemoAmbientMessage(roomId);
       if (message) handlersRef.current.onInsert?.(message as Message);
+      // Natural gaps: activity is intermittent, not a message every second.
       ambientTimer = window.setTimeout(emitAmbient, 12_000 + Math.floor(Math.random() * 24_000));
     };
 
+    // Give a fresh room a moment before its first synthetic activity.
     ambientTimer = window.setTimeout(emitAmbient, 8_000 + Math.floor(Math.random() * 12_000));
 
     const channel = supabase
