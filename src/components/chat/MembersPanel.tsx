@@ -80,36 +80,38 @@ export function MembersPanel({ members, presence }: { members: RoomMemberWithPro
     const isModerator = row.role === "moderator";
     const roleColor = isOwner ? "text-amber-400" : isAdmin ? "text-red-400" : isModerator ? "text-violet-400" : isSpeaker ? "text-emerald-400" : colorFor(row.id);
     return (
-      <li key={row.id} className="group flex items-center gap-1.5 rounded-xl px-1.5 py-2 transition-colors hover:bg-secondary/60 sm:gap-2 sm:px-2.5">
+      <li key={row.id} className="group flex items-center gap-1 rounded-lg px-1 py-1.5 transition-colors hover:bg-secondary/60 sm:gap-2 sm:px-2 sm:py-2">
         <div className="relative shrink-0">
           <UserAvatar name={row.name} src={row.avatar} size="sm" status={row.status === "offline" ? undefined : row.status} />
           {isOwner ? <span className="absolute -start-1 -top-1 grid size-4 place-items-center rounded-full bg-amber-400 text-black"><Crown className="size-2.5" /></span> : null}
           {isModerator || isAdmin ? <span className="absolute -start-1 -bottom-1 grid size-4 place-items-center rounded-full bg-violet-500 text-white"><Shield className="size-2.5" /></span> : null}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1">
-            <span className={`truncate text-xs font-semibold sm:text-sm ${roleColor}`}>{row.name || "—"}</span>
+          <div className="flex items-center gap-0.5">
+            <span className={`truncate text-[10px] font-semibold sm:text-sm ${roleColor}`}>{row.name || "—"}</span>
             {isSpeaker ? <Mic2 className="size-3 shrink-0 text-emerald-400" aria-label="صاعد المايك" /> : null}
             {isOwner || isModerator ? <Star className={`size-3 shrink-0 ${isOwner ? "text-amber-400" : "text-violet-400"}`} aria-label={isOwner ? "مالك الغرفة" : "مشرف"} /> : null}
           </div>
-          <div className="truncate text-[9px] text-muted-foreground sm:text-[10px]">{isOwner ? "مالك الغرفة" : isAdmin ? "إدارة" : isModerator ? "مشرف" : isSpeaker ? "صاعد المايك" : row.status === "online" ? "نشط الآن" : row.status === "away" ? "خامل" : "غير متصل"}</div>
+          <div className="truncate text-[8px] text-muted-foreground sm:text-[10px]">{isOwner ? "مالك الغرفة" : isAdmin ? "إدارة" : isModerator ? "مشرف" : isSpeaker ? "صاعد المايك" : row.status === "online" ? "نشط الآن" : row.status === "away" ? "خامل" : "غير متصل"}</div>
         </div>
         {index === 0 && !isOwner && !isModerator && !isAdmin ? <span className="size-1.5 shrink-0 rounded-full bg-emerald-400" /> : null}
       </li>
     );
   };
 
-  const alertButton = <Button type="button" variant="secondary" className="h-9 w-full justify-center gap-2 text-xs" onClick={() => void alertAdmin()} disabled={!user || !room.data}><Bell className="size-4" /> <span>تنبيه الإدارة</span></Button>;
-
   return (
-    <aside className="glass flex h-[calc(100dvh-190px)] w-[34vw] min-w-[145px] max-w-80 shrink-0 flex-col overflow-hidden rounded-2xl sm:rounded-3xl lg:h-[calc(100dvh-140px)]">
-      <header className="flex items-center gap-1.5 border-b px-2.5 py-3 sm:gap-2 sm:px-4"><Users className="size-4 shrink-0 text-primary sm:size-5" aria-hidden /><div className="min-w-0 flex-1"><h2 className="truncate font-display text-xs font-bold sm:text-sm">الأعضاء</h2><p className="truncate text-[9px] text-muted-foreground sm:text-[10px]">{onlineCount} متصل الآن</p></div><Badge variant="secondary" className="shrink-0 text-[9px]">{rows.length}</Badge></header>
-      <div className="border-b p-2 sm:px-3 sm:py-2">{alertButton}</div>
-      {events.length ? <div className="border-b bg-secondary/20 px-2 py-2 sm:px-3"><p className="mb-1 text-[9px] font-semibold text-muted-foreground">آخر النشاط</p><div className="space-y-1">{events.slice(0, 3).map((event) => <p key={event.id} className="truncate text-[9px] text-muted-foreground">{event.text}</p>)}</div></div> : null}
-      <div className="flex-1 overflow-y-auto scrollbar-slim p-1.5 sm:p-2.5">
-        {staff.length ? <section className="mb-3"><p className="px-1 pb-1 text-[9px] font-bold uppercase tracking-wide text-muted-foreground sm:px-2">المشرفون</p><ul className="space-y-1">{staff.map((row, index) => renderRow(row, index))}</ul></section> : null}
-        {speakers.length ? <section className="mb-3"><p className="flex items-center gap-1 px-1 pb-1 text-[9px] font-bold uppercase tracking-wide text-emerald-400 sm:px-2"><Mic2 className="size-3" /> على المايك الآن</p><ul className="space-y-1">{speakers.map((row, index) => renderRow(row, index))}</ul></section> : null}
-        <section><p className="px-1 pb-1 text-[9px] font-bold uppercase tracking-wide text-muted-foreground sm:px-2">الأعضاء</p><ul className="space-y-1">{regular.slice(0, 48).map((row, index) => renderRow(row, index))}</ul></section>
+    <aside className="glass flex h-[calc(100dvh-190px)] w-[37vw] min-w-[132px] max-w-80 shrink-0 flex-col overflow-hidden rounded-xl sm:rounded-2xl lg:h-[calc(100dvh-140px)]">
+      <header className="flex items-center gap-1 border-b px-2 py-2.5 sm:gap-2 sm:px-4 sm:py-3">
+        <Users className="size-4 shrink-0 text-primary sm:size-5" aria-hidden />
+        <div className="min-w-0 flex-1"><h2 className="truncate text-[11px] font-bold sm:text-sm">الأعضاء</h2><p className="truncate text-[8px] text-muted-foreground sm:text-[10px]">{onlineCount} متصل</p></div>
+        <Badge variant="secondary" className="shrink-0 px-1.5 text-[8px] sm:text-[9px]">{rows.length}</Badge>
+      </header>
+      <div className="border-b p-1.5 sm:p-2">{<Button type="button" variant="secondary" className="h-8 w-full justify-center gap-1 text-[9px] sm:h-9 sm:gap-2 sm:text-xs" onClick={() => void alertAdmin()} disabled={!user || !room.data}><Bell className="size-3.5 sm:size-4" /><span>تنبيه الإدارة</span></Button>}</div>
+      {events.length ? <div className="border-b bg-secondary/20 px-1.5 py-1.5 sm:px-3 sm:py-2"><p className="mb-1 text-[8px] font-semibold text-muted-foreground sm:text-[9px]">آخر النشاط</p><div className="space-y-0.5">{events.slice(0, 2).map((event) => <p key={event.id} className="truncate text-[8px] text-muted-foreground sm:text-[9px]">{event.text}</p>)}</div></div> : null}
+      <div className="flex-1 overflow-y-auto scrollbar-slim p-1 sm:p-2">
+        {staff.length ? <section className="mb-2.5"><p className="px-1 pb-1 text-[8px] font-bold uppercase tracking-wide text-amber-300 sm:px-2 sm:text-[9px]">المشرفون</p><ul className="space-y-0.5 sm:space-y-1">{staff.map((row, index) => renderRow(row, index))}</ul></section> : null}
+        {speakers.length ? <section className="mb-2.5"><p className="flex items-center gap-1 px-1 pb-1 text-[8px] font-bold uppercase tracking-wide text-emerald-400 sm:px-2 sm:text-[9px]"><Mic2 className="size-3" /> على المايك الآن</p><ul className="space-y-0.5 sm:space-y-1">{speakers.map((row, index) => renderRow(row, index))}</ul></section> : null}
+        <section><p className="px-1 pb-1 text-[8px] font-bold uppercase tracking-wide text-muted-foreground sm:px-2 sm:text-[9px]">الأعضاء</p><ul className="space-y-0.5 sm:space-y-1">{regular.slice(0, 48).map((row, index) => renderRow(row, index))}</ul></section>
       </div>
     </aside>
   );
