@@ -3,6 +3,9 @@ import { ArrowLeft, Mic, MessagesSquare, Shield, Sparkles, Users } from "lucide-
 import { Button } from "@/components/ui/button";
 import { GlassCard } from "@/components/shared/GlassCard";
 import { MarketingLayout } from "@/layouts/MarketingLayout";
+import { AppLayout } from "@/layouts/AppLayout";
+import { CommunityBrowser } from "@/components/communities/CommunityBrowser";
+import { PageHeader } from "@/components/shared/PageHeader";
 import { useI18n } from "@/contexts/i18n-context";
 import { useAuth } from "@/contexts/auth-context";
 
@@ -11,6 +14,17 @@ const featureIcons = [MessagesSquare, Users, Shield, Mic];
 export function HomePage() {
   const { t } = useI18n();
   const { isAuthenticated } = useAuth();
+
+  if (isAuthenticated) {
+    return (
+      <AppLayout>
+        <div className="space-y-6">
+          <PageHeader title={t.homeDash.welcome} description={t.homeDash.subtitle} />
+          <CommunityBrowser />
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <MarketingLayout>
