@@ -96,21 +96,30 @@ export function ChatRoomPage({ slug }: { slug: string }) {
     queryKey: ["chat-member-roles", roomId, memberIds.join(",")],
     enabled: memberIds.length > 0,
     queryFn: async () => {
-      const { data, error } = await supabase.from("user_roles").select("user_id,role").in("user_id", memberIds);
-      if (error) throw error;
-      return data ?? [];
+      const [{ data: global, error: globalError }, { data: roomRoles, error: roomError }] = await Promise.all([
+        supabase.from("user_roles").select("user_id,role").in("user_id", memberIds),
+        roomId ? supabase.from("room_members").select("user_id,role").eq("room_id", roomId).in("user_id", memberIds) : Promise.resolve({ data: [], error: null } as any),
+      ]);
+      if (globalError) throw globalError;
+      if (roomError) throw roomError;
+      return { global: global ?? [], room: roomRoles ?? [] };
     },
     staleTime: 30000,
   });
 
   const roleById = useMemo(() => {
     const map = new Map<string, "admin" | "moderator">();
-    for (const row of memberRoles.data ?? []) {
+    for (const row of memberRoles.data?.room ?? []) {
+      if (row.role === "owner") map.set(row.user_id, "admin");
+      else if (row.role === "moderator") map.set(row.user_id, "moderator");
+    }
+    for (const row of memberRoles.data?.global ?? []) {
       if (row.role === "admin") map.set(row.user_id, "admin");
       else if (row.role === "moderator" && !map.has(row.user_id)) map.set(row.user_id, "moderator");
     }
+    if (room.data?.owner_id) map.set(room.data.owner_id, "admin");
     return map;
-  }, [memberRoles.data]);
+  }, [memberRoles.data, room.data?.owner_id]);
 
   const messages = useInfiniteQuery({
     queryKey: ["messages", roomId],
@@ -262,7 +271,7 @@ export function ChatRoomPage({ slug }: { slug: string }) {
   if (!room.data) return <EmptyState icon={MessagesSquare} title={t.common.empty} description={t.common.error} />;
 
   return (
-    <div className="flex min-h-0 h-[calc(100dvh-135px)] translate-y-1 gap-2 overflow-hidden lg:h-[calc(100dvh-175px)] lg:translate-y-0 lg:gap-3">
+    <div className="flex min-h-0 h-[calc(100dvh-115px)] gap-2 overflow-hidden pb-[calc(78px+env(safe-area-inset-bottom))] sm:h-[calc(100dvh-150px)] sm:pb-0 lg:h-[calc(100dvh-175px)] lg:gap-3">
       <aside className="glass hidden w-[220px] shrink-0 flex-col overflow-hidden rounded-2xl lg:flex">
         <div className="flex items-center gap-2 border-b px-3 py-3">
           <Hash className="size-4 text-primary" />
@@ -289,28 +298,14 @@ export function ChatRoomPage({ slug }: { slug: string }) {
       </aside>
 
       <section className="glass-strong flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl lg:rounded-3xl">
-        <header className="flex shrink-0 items-center gap-3 border-b bg-background/35 px-3 py-2.5 sm:px-4 sm:py-3">
+        <header className="flex shrink-0 items-center gap-2 border-b bg-background/35 px-2.5 py-2.5 sm:gap-3 sm:px-4 sm:py-3">
           <UserAvatar name={room.data.name} size="sm" />
           <div className="min-w-0 flex-1">
             <h1 className="truncate font-display text-sm font-black sm:text-base">{room.data.name}</h1>
             <p className="truncate text-[10px] text-muted-foreground sm:text-xs">{room.data.description ?? "غرفة ديوان"} · اضغط الاسم لعرض الأعضاء</p>
           </div>
           <Badge variant="secondary" className="hidden shrink-0 gap-1 px-2 text-[10px] sm:inline-flex sm:text-xs"><span className="size-1.5 rounded-full bg-emerald-400" />{presence.online.length} {t.chat.online}</Badge>
-          {canManageRoles ? (
-            <>
-              <Button type="button" size="sm" variant="outline" className="hidden h-9 shrink-0 gap-1.5 rounded-xl text-xs sm:inline-flex" onClick={() => setRolesOpen(true)}>
-                <ShieldCheck className="size-4" />تعديل الرتب والصلاحيات
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button type="button" size="icon" variant="outline" className="size-9 shrink-0 rounded-xl sm:hidden" aria-label="إدارة الغرفة"><Settings2 className="size-4" /></Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-56">
-                  <DropdownMenuItem onClick={() => setRolesOpen(true)}><ShieldCheck className="size-4" />تعديل الرتب والصلاحيات</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </>
-          ) : null}
+          {canManageRoles ? <Button type="button" size="sm" variant="outline" className="h-9 shrink-0 gap-1.5 rounded-xl border-primary/30 bg-primary/5 px-2 text-[10px] font-black text-primary sm:px-3 sm:text-xs" onClick={() => setRolesOpen(true)} aria-label="تعديل الرتب والصلاحيات"><ShieldCheck className="size-4" /><span>الرتب</span><span className="hidden sm:inline"> والصلاحيات</span></Button> : null}
         </header>
         <RoomRolesDialog roomId={roomId} roomName={room.data.name} permissions={{ ...permissions, canManageRoles }} open={rolesOpen} onOpenChange={setRolesOpen} />
 
@@ -337,11 +332,11 @@ export function ChatRoomPage({ slug }: { slug: string }) {
                   {showDay ? <div className="flex items-center gap-2 py-1"><span className="h-px flex-1 bg-border" /><span className="rounded-full bg-secondary px-2.5 py-1 text-[9px] font-semibold text-muted-foreground">{dayLabel(message.created_at, locale, t.chat)}</span><span className="h-px flex-1 bg-border" /></div> : null}
                   <div className={`group flex items-end gap-2 ${mine ? "flex-row-reverse" : ""}`}>
                     <UserAvatar name={name} src={message.author?.avatar_url ?? null} size="sm" status={presence.onlineIds.has(message.user_id) ? "online" : undefined} role={messageRole ?? null} />
-                    <div className={`min-w-0 max-w-[86%] sm:max-w-[72%] ${mine ? "items-end" : "items-start"}`}>
+                    <div className={`min-w-0 max-w-[88%] sm:max-w-[72%] ${mine ? "items-end" : "items-start"}`}>
                       <div className={`rounded-2xl px-3.5 py-2 ${mine ? "rounded-te-md" : "rounded-ts-md"} ${bubble}`}>
                         <div className="mb-0.5 flex flex-wrap items-center gap-1.5">
-                          {admin ? <span className="rounded-full border border-rose-400/40 bg-rose-500/10 px-1.5 py-0.5 text-[7px] font-black text-rose-300">ADMIN</span> : mod ? <span className="rounded-full border border-sky-400/40 bg-sky-500/10 px-1.5 py-0.5 text-[7px] font-black text-sky-300">MOD</span> : null}
-                          <p className={admin ? "text-[10px] font-black text-rose-300" : mod ? "text-[10px] font-bold text-sky-300" : "text-[10px] font-semibold opacity-70"}>{admin ? "👑 " : ""}{name}</p>
+                          {admin ? <span className="rounded-full border border-rose-400/40 bg-rose-500/10 px-1.5 py-0.5 text-[8px] font-black text-rose-300">👑 ADMIN</span> : mod ? <span className="rounded-full border border-sky-400/40 bg-sky-500/10 px-1.5 py-0.5 text-[8px] font-black text-sky-300">MOD</span> : null}
+                          <p className={admin ? "text-[10px] font-black text-rose-300" : mod ? "text-[10px] font-bold text-sky-300" : "text-[10px] font-semibold opacity-70"}>{name}</p>
                         </div>
                         {parent ? <p className="mb-1.5 truncate rounded-lg border-s-2 border-current/25 ps-2 text-[10px] opacity-65">{parent.author?.display_name || parent.author?.username}: {parent.content}</p> : null}
                         <p className="whitespace-pre-wrap break-words text-[13px] leading-5 sm:text-sm">{highlight(message.content)}</p>
@@ -374,7 +369,7 @@ export function ChatRoomPage({ slug }: { slug: string }) {
 
         {isBanned || isMuted ? <div className="shrink-0 border-t bg-destructive/10 p-3 text-sm text-destructive"><ShieldOff className="me-2 inline size-4" />{isBanned ? t.chat.banned : t.chat.muted}</div> : <>
           <div className="shrink-0 border-t bg-background/30 px-2 pt-1.5"><VoiceRoomDock roomName={room.data.name} /></div>
-          <form className="shrink-0 border-t bg-background/50 p-2.5 sm:p-3" onSubmit={(event) => { event.preventDefault(); submit(); }}>
+          <form className="shrink-0 border-t bg-background/50 p-2 sm:p-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))]" onSubmit={(event) => { event.preventDefault(); submit(); }}>
             <div className="mx-auto flex max-w-4xl items-end gap-2 rounded-2xl border bg-secondary/45 p-1.5 shadow-sm focus-within:border-primary/40">
               <Textarea value={draft} onChange={(event) => setDraft(event.target.value.slice(0, MAX_MESSAGE_LENGTH))} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submit(); } }} placeholder={t.common.messagePlaceholder} className="min-h-10 max-h-28 resize-none border-0 bg-transparent px-2 py-2 shadow-none focus-visible:ring-0" />
               <Button type="submit" size="icon" className="size-10 shrink-0 rounded-xl" disabled={!draft.trim() || send.isPending || !user}><SendHorizonal className="size-4" /></Button>
