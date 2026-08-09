@@ -5,7 +5,6 @@ import { Compass, Flame, Globe2, MapPin, MessagesSquare, Search, Users } from "l
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { CardGridSkeleton } from "@/components/shared/Loaders";
 import { useI18n } from "@/contexts/i18n-context";
@@ -23,15 +22,15 @@ function RoomCard({ room }: { room: RoomWithStats }) {
     <Link
       to="/chat/$slug"
       params={{ slug: room.slug }}
-      className="glass group flex flex-col gap-2 rounded-2xl p-4 transition-all duration-200 hover:-translate-y-0.5 hover:bg-secondary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+      className="glass group flex flex-col gap-3 rounded-2xl p-4 transition-all duration-200 hover:-translate-y-0.5 hover:bg-secondary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none motion-reduce:hover:translate-y-0"
     >
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-secondary text-primary">
-          <MapPin className="size-4" aria-hidden />
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15">
+          <MessagesSquare className="size-4" aria-hidden />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate font-display font-bold">{room.name}</span>
-          <span className="block truncate text-xs text-muted-foreground">{room.country ?? "—"}</span>
+          <span className="block truncate text-xs text-muted-foreground">{room.city ?? room.country ?? "—"}</span>
         </span>
         {isActive ? (
           <Badge className="shrink-0 gap-1 bg-success/15 text-success" variant="secondary">
@@ -39,7 +38,7 @@ function RoomCard({ room }: { room: RoomWithStats }) {
           </Badge>
         ) : null}
       </div>
-      <p className="line-clamp-1 text-sm text-muted-foreground">{room.description ?? "—"}</p>
+      <p className="line-clamp-2 min-h-10 text-sm text-muted-foreground">{room.description ?? "—"}</p>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-1">
           <Users className="size-3.5" aria-hidden /> {room.member_count} {t.communities.members}
@@ -55,52 +54,63 @@ function RoomCard({ room }: { room: RoomWithStats }) {
 
 export function CommunityBrowser() {
   const { t } = useI18n();
-  const [region, setRegion] = useState<"all" | "arab" | "europe">("all");
   const [term, setTerm] = useState("");
   const [openCountry, setOpenCountry] = useState<string | null>(null);
 
   const rooms = useQuery(roomsWithStatsQuery());
   const tree = useMemo(() => buildCommunityTree(rooms.data ?? []), [rooms.data]);
-
-  const visible = useMemo(
-    () => (region === "all" ? tree : tree.filter((node) => node.region === region)),
-    [tree, region],
-  );
+  const arabicRooms = rooms.data ?? [];
+  const countryCount = tree[0]?.countries.length ?? 0;
 
   const search = term.trim().toLowerCase();
   const searchResults = useMemo(() => {
     if (!search) return [];
-    return (rooms.data ?? []).filter(
-      (room) =>
-        !room.is_private &&
-        [room.name, room.country, room.city, room.description].some((value) =>
-          (value ?? "").toLowerCase().includes(search),
-        ),
+    return arabicRooms.filter((room) =>
+      [room.name, room.country, room.city, room.description].some((value) =>
+        (value ?? "").toLowerCase().includes(search),
+      ),
     );
-  }, [rooms.data, search]);
+  }, [arabicRooms, search]);
 
   if (rooms.isLoading) return <CardGridSkeleton />;
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative min-w-0 flex-1">
-          <Search className="pointer-events-none absolute inset-y-0 start-3 my-auto size-4 text-muted-foreground" aria-hidden />
-          <Input
-            value={term}
-            onChange={(event) => setTerm(event.target.value)}
-            placeholder={t.communities.searchRooms}
-            aria-label={t.communities.searchRooms}
-            className="ps-9"
-          />
+    <div className="space-y-5" dir="rtl">
+      <section className="glass relative overflow-hidden rounded-3xl p-5 sm:p-6">
+        <div className="pointer-events-none absolute -start-10 -top-12 size-36 rounded-full bg-primary/10 blur-3xl" />
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+              <Globe2 className="size-3.5" aria-hidden />
+              {t.communities.arab}
+            </div>
+            <h1 className="font-display text-2xl font-black tracking-tight">الغرف العربية</h1>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+              غرف ومجتمعات عربية فقط، مرتبة حسب الدولة والمدينة.
+            </p>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <div className="rounded-2xl bg-secondary/60 px-4 py-2 text-center">
+              <div className="text-lg font-black">{countryCount}</div>
+              <div className="text-[11px] text-muted-foreground">دول عربية</div>
+            </div>
+            <div className="rounded-2xl bg-secondary/60 px-4 py-2 text-center">
+              <div className="text-lg font-black">{arabicRooms.length}</div>
+              <div className="text-[11px] text-muted-foreground">غرفة</div>
+            </div>
+          </div>
         </div>
-        <Tabs value={region} onValueChange={(value) => setRegion(value as typeof region)}>
-          <TabsList className="h-11">
-            <TabsTrigger value="all" className="min-h-9">{t.communities.allRegions}</TabsTrigger>
-            <TabsTrigger value="arab" className="min-h-9">{t.communities.arab}</TabsTrigger>
-            <TabsTrigger value="europe" className="min-h-9">{t.communities.europe}</TabsTrigger>
-          </TabsList>
-        </Tabs>
+      </section>
+
+      <div className="relative">
+        <Search className="pointer-events-none absolute inset-y-0 start-3 my-auto size-4 text-muted-foreground" aria-hidden />
+        <Input
+          value={term}
+          onChange={(event) => setTerm(event.target.value)}
+          placeholder={t.communities.searchRooms}
+          aria-label={t.communities.searchRooms}
+          className="h-12 rounded-2xl ps-9"
+        />
       </div>
 
       {search ? (
@@ -108,85 +118,78 @@ export function CommunityBrowser() {
           <EmptyState icon={Search} title={t.communities.noResults} />
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {searchResults.map((room) => (
-              <RoomCard key={room.id} room={room} />
-            ))}
+            {searchResults.map((room) => <RoomCard key={room.id} room={room} />)}
           </div>
         )
-      ) : visible.length === 0 ? (
-        <EmptyState icon={Compass} title={t.common.empty} description={t.communities.subtitle} />
+      ) : tree.length === 0 ? (
+        <EmptyState icon={Compass} title="لا توجد غرف عربية حالياً" description="ستظهر الغرف العربية هنا عند توفرها." />
       ) : (
-        visible.map((node) => (
-          <section key={node.region} className="space-y-3">
-            <header className="flex flex-wrap items-center gap-2">
-              <span className="grid size-9 place-items-center rounded-xl bg-primary/15 text-primary">
-                <Globe2 className="size-4" aria-hidden />
-              </span>
-              <h2 className="font-display text-lg font-bold">
-                {node.region === "arab" ? t.communities.arab : t.communities.europe}
-              </h2>
-              <Badge variant="secondary">
-                {node.countries.length} {t.communities.countries}
-              </Badge>
-              <Badge variant="secondary">
-                {node.room_count} {t.communities.rooms}
-              </Badge>
-            </header>
-
-            <div className="space-y-3">
-              {node.countries.map((country) => {
-                const key = `${node.region}:${country.country}`;
-                const open = openCountry === key;
-                return (
-                  <div key={key} className="glass overflow-hidden rounded-2xl">
-                    <button
-                      type="button"
-                      aria-expanded={open}
-                      onClick={() => setOpenCountry(open ? null : key)}
-                      className="flex min-h-12 w-full items-center gap-3 px-4 py-3 text-start transition-colors hover:bg-secondary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-display font-bold">{country.country}</span>
-                        <span className="block truncate text-xs text-muted-foreground">
-                          {country.cities.length} {t.communities.cities} · {country.member_count}{" "}
-                          {t.communities.members}
-                        </span>
-                      </span>
-                      <span className="text-xs text-muted-foreground">{open ? "−" : "+"}</span>
-                    </button>
-                    {open ? (
-                      <div className="grid gap-3 border-t p-3 sm:grid-cols-2 lg:grid-cols-3">
-                        {country.cities.map((room) => (
-                          <RoomCard key={room.id} room={room} />
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
+        <section className="space-y-3">
+          <header className="flex items-center gap-2 px-1">
+            <span className="grid size-9 place-items-center rounded-xl bg-primary/15 text-primary">
+              <Globe2 className="size-4" aria-hidden />
+            </span>
+            <div>
+              <h2 className="font-display text-lg font-bold">الدول العربية</h2>
+              <p className="text-xs text-muted-foreground">اختر الدولة لعرض غرفها</p>
             </div>
-          </section>
-        ))
+          </header>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            {tree[0].countries.map((country) => {
+              const key = `arab:${country.country}`;
+              const open = openCountry === key;
+              return (
+                <div key={key} className="glass overflow-hidden rounded-2xl">
+                  <button
+                    type="button"
+                    aria-expanded={open}
+                    onClick={() => setOpenCountry(open ? null : key)}
+                    className="flex min-h-16 w-full items-center gap-3 px-4 py-3 text-start transition-colors hover:bg-secondary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-secondary text-primary">
+                      <MapPin className="size-4" aria-hidden />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-display font-bold">{country.country}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {country.cities.length} {t.communities.cities} · {country.member_count} {t.communities.members}
+                      </span>
+                    </span>
+                    <span className="grid size-8 place-items-center rounded-full bg-secondary text-lg text-muted-foreground">
+                      {open ? "−" : "+"}
+                    </span>
+                  </button>
+                  {open ? (
+                    <div className="grid gap-3 border-t p-3 sm:grid-cols-2">
+                      {country.cities.map((room) => <RoomCard key={room.id} room={room} />)}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </section>
       )}
 
-      {!search && rooms.data && rooms.data.length > 0 ? (
+      {!search && arabicRooms.length > 0 ? (
         <section className="space-y-3">
-          <h2 className="font-display text-lg font-bold">{t.communities.recent}</h2>
+          <div className="flex items-center justify-between px-1">
+            <h2 className="font-display text-lg font-bold">أحدث الغرف العربية</h2>
+            <Badge variant="secondary">عربي فقط</Badge>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {[...rooms.data]
-              .filter((room) => !room.is_private)
+            {[...arabicRooms]
               .sort(
                 (a, b) =>
                   new Date(b.last_message_at ?? b.last_activity_at).getTime() -
                   new Date(a.last_message_at ?? a.last_activity_at).getTime(),
               )
               .slice(0, 6)
-              .map((room) => (
-                <RoomCard key={`recent-${room.id}`} room={room} />
-              ))}
+              .map((room) => <RoomCard key={`recent-${room.id}`} room={room} />)}
           </div>
           <Button variant="ghost" size="sm" asChild>
-            <Link to="/rooms">{t.homeDash.explore}</Link>
+            <Link to="/rooms">استكشاف الغرف العربية</Link>
           </Button>
         </section>
       ) : null}
