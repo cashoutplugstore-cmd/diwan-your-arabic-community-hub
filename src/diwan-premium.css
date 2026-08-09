@@ -24,4 +24,10 @@ main:has(.glass-strong) > div.flex.gap-2 > .glass-strong > header button[aria-la
 @media (max-width: 767px) {
   main:has(.glass-strong) > div.flex.gap-2 > .glass-strong > header button[aria-label="تعديل الرتب والصلاحيات"] { height: 30px; min-width: 50px; padding-inline: 7px; border-radius: 10px; font-size: 9px; }
   main:has(.glass-strong) > div.flex.gap-2 > .glass-strong > header button[aria-label="تعديل الرتب والصلاحيات"] svg { width: 14px; height: 14px; }
+
+  /* Mobile: bring the chat card closer to the bottom navigation; the old 78px
+     reserved gap made the whole chat look like it was floating too high. */
+  main:has(.glass-strong) > div.flex.gap-2 {
+    padding-bottom: calc(10px + env(safe-area-inset-bottom)) !important;
+  }
 }
