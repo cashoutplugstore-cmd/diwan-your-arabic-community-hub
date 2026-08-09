@@ -29,7 +29,9 @@ main:has(.glass-strong) aside.glass [aria-label="تعديل الرتب والص�
 main:has(.glass-strong) aside[role="dialog"] [aria-label="تعديل الرتب والصلاحيات"] { display: none !important; }
 
 @media (max-width: 767px) {
-  main:has(.glass-strong) > div.flex.gap-2 { display: flex; width: 100%; min-height: calc(100dvh - 115px); height: calc(100dvh - 115px); margin: 0; padding: 0 8px calc(78px + env(safe-area-inset-bottom)); gap: 8px; }
+  /* Chat should sit close to the bottom navigation. The previous 78px
+     padding created the visible empty strip underneath the room. */
+  main:has(.glass-strong) > div.flex.gap-2 { display: flex; width: 100%; min-height: calc(100dvh - 115px); height: calc(100dvh - 115px); margin: 0; padding: 0 8px calc(10px + env(safe-area-inset-bottom)); gap: 8px; }
   main:has(.glass-strong) > div.flex.gap-2 > .glass-strong { display: flex; flex: 1 1 auto; min-width: 0; width: 100%; min-height: 0; height: 100%; border-radius: 16px; overflow: hidden; }
   main:has(.glass-strong) > div.flex.gap-2 > div[class*="w-[250px]"] { display: none; }
   main:has(.glass-strong) > div.flex.gap-2 > .glass-strong > header { min-height: 58px; padding: 8px 10px; gap: 8px; }
