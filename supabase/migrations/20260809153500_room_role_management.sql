@@ -7,6 +7,7 @@ USING (
     SELECT 1 FROM public.rooms r
     WHERE r.id = room_members.room_id
       AND (r.owner_id = auth.uid() OR public.has_role(auth.uid(), 'admin'))
+      AND r.owner_id <> room_members.user_id
   )
 )
 WITH CHECK (
