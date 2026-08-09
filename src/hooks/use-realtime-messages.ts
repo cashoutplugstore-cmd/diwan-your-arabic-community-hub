@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { buildDemoReply, buildDemoAmbientMessage } from "@/lib/demo-activity";
+import { buildDemoAmbientMessage } from "@/lib/demo-activity";
+import { triggerAIRoomReplies } from "@/services/messages.service";
 import type { Message } from "@/types";
 
 type Handlers = {
@@ -10,8 +11,8 @@ type Handlers = {
 };
 
 /**
- * Realtime room messages plus a lightweight, clearly synthetic UI activity layer.
- * Synthetic activity is never inserted into Supabase and is throttled for mobile performance.
+ * Realtime room messages plus a lightweight synthetic UI activity layer.
+ * Synthetic activity is never inserted into Supabase.
  */
 export function useRealtimeMessages(roomId: string | undefined, handlers: Handlers = {}) {
   const queryClient = useQueryClient();
@@ -20,13 +21,8 @@ export function useRealtimeMessages(roomId: string | undefined, handlers: Handle
 
   useEffect(() => {
     if (!roomId) return;
-    let selfUserId: string | undefined;
     let disposed = false;
     let ambientTimer: number | undefined;
-
-    void supabase.auth.getUser().then(({ data }) => {
-      if (!disposed) selfUserId = data.user?.id;
-    });
 
     const emitAmbient = () => {
       if (disposed || document.visibilityState !== "visible") return;
@@ -48,13 +44,17 @@ export function useRealtimeMessages(roomId: string | undefined, handlers: Handle
           const message = payload.new as Message;
           handlersRef.current.onInsert?.(message);
 
-          if (selfUserId && message.user_id === selfUserId) {
-            const demoReply = buildDemoReply(roomId, message.content);
-            if (demoReply) {
-              window.setTimeout(() => {
-                if (!disposed) handlersRef.current.onInsert?.(demoReply as Message);
-              }, 1200);
-            }
+          // Every real member message can naturally trigger the community AI.
+          // triggerAIRoomReplies deduplicates by message id, so the local send
+          // path and this realtime path cannot schedule the same reaction twice.
+          if (!String(message.user_id).startsWith("demo-")) {
+            triggerAIRoomReplies({
+              roomId,
+              messageId: message.id,
+              message: message.content,
+              createdAt: message.created_at,
+              onReply: (reply) => handlersRef.current.onInsert?.(reply as Message),
+            });
           }
         },
       )
