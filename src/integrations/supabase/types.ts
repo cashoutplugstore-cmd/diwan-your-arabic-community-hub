@@ -307,6 +307,51 @@ export type Database = {
           },
         ]
       }
+      room_voice_participants: {
+        Row: {
+          created_at: string
+          id: string
+          is_muted: boolean
+          is_speaker: boolean
+          room_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_muted?: boolean
+          is_speaker?: boolean
+          room_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_muted?: boolean
+          is_speaker?: boolean
+          room_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_voice_participants_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "room_stats"
+            referencedColumns: ["room_id"]
+          },
+          {
+            foreignKeyName: "room_voice_participants_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rooms: {
         Row: {
           city: string | null
