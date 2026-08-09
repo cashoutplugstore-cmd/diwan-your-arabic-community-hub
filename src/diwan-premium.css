@@ -18,6 +18,9 @@ main:has(.glass-strong) > div.flex.gap-2 > .glass-strong > header button[aria-la
 main:has(.glass-strong) > div.flex.gap-2 > div[class*="w-[250px]"] [aria-label="تعديل الرتب والصلاحيات"], main:has(.glass-strong) > div.flex.gap-2 > div.lg\:hidden [aria-label="تعديل الرتب والصلاحيات"], main:has(.glass-strong) aside.glass [aria-label="تعديل الرتب والصلاحيات"] { display: none !important; }
 main:has(.glass-strong) > div.flex.gap-2 > div[class*="w-[250px]"] header, main:has(.glass-strong) > div.flex.gap-2 > div.lg\:hidden header { min-height: 52px; background: color-mix(in oklab, var(--secondary) 34%, transparent); border-bottom-color: color-mix(in oklab, var(--border) 75%, transparent); }
 
+/* The room title is the mobile members entry point; remove the old floating members button. */
+main:has(.glass-strong) > div.flex.gap-2 > .glass-strong > header button[aria-label="فتح أعضاء الغرفة"] { display: none !important; }
+
 @media (max-width: 767px) {
   main:has(.glass-strong) > div.flex.gap-2 > .glass-strong > header button[aria-label="تعديل الرتب والصلاحيات"] { height: 30px; min-width: 50px; padding-inline: 7px; border-radius: 10px; font-size: 9px; }
   main:has(.glass-strong) > div.flex.gap-2 > .glass-strong > header button[aria-label="تعديل الرتب والصلاحيات"] svg { width: 14px; height: 14px; }
