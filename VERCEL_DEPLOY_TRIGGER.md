@@ -8,4 +8,4 @@ This file intentionally triggers a fresh Vercel Production deployment from `main
 - Demo identities are never inserted into the real messages table
 - Role control remains single and subtle in the room header
 
-Deployment sync marker: 2026-08-09T23:11:00Z
+Deployment sync marker: 2026-08-10T00:00:00Z
