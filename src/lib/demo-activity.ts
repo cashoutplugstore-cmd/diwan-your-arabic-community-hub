@@ -11,7 +11,7 @@ const roomPools: Record<string, string[]> = {
 };
 
 const greetings = ["هلا والله 🌷 نورتينا!", "هلااا، نورت الغرفة ❤️", "أهلاً وسهلاً! شلونج؟", "يا هلا، نورتينا بينا 😊", "أهلاً بيج! شنو أخبارج اليوم؟"];
-const followUps = ["شلون يومج وياج؟", "إذا عندج سؤال احچي، إحنا هنا 🌷", "من أي مدينة؟", "تعالي ويانا بالسوالف 😄", "شنو رأيج بالغرفة؟"];
+const followUps = ["إي والله 😄 شنو رأيك؟", "ههههه مضبوط 😂", "اتفق وياك، كمل السالفة 🌷", "زين! منو عنده تجربة ثانية؟", "حلوة السالفة 😄", "إذا تعرفون مكان زين دلونا عليه ☕"];
 const recentlyReplied = new Map<string, number>();
 const recentlyAmbient = new Map<string, number>();
 
@@ -34,7 +34,7 @@ export function getActiveDemoMembers(limit = 48): Profile[] {
   return DEMO_PROFILES.slice(0, limit).map((profile) => ({ ...profile, status: "online", updated_at: new Date().toISOString() }));
 }
 
-/** UI-only demo reply; never inserted into Supabase. */
+/** UI-only AI/community reply; never inserted into Supabase. */
 export function buildDemoReply(roomId: string, realMessage: string): MessageWithAuthor | null {
   const now = Date.now();
   if (now - (recentlyReplied.get(roomId) ?? 0) < 25_000) return null;
@@ -42,15 +42,26 @@ export function buildDemoReply(roomId: string, realMessage: string): MessageWith
   const author = authorFor(roomId, now);
   const isGreeting = /(^|\s)(سلام|هلا|هلو|مرحبا|هاي|hello|hi)(\s|!|！|$)/iu.test(realMessage);
   const pool = isGreeting ? greetings : followUps;
-  return { id: `demo-live-${roomId}-${now}`, room_id: roomId, user_id: author.id, content: pool[Math.floor(Math.random() * pool.length)]!, created_at: new Date(now + 1200).toISOString(), reply_to_id: null, edited_at: null, is_deleted: false, author };
+  return { id: `ai-live-${roomId}-${now}`, room_id: roomId, user_id: author.id, content: pool[Math.floor(Math.random() * pool.length)]!, created_at: new Date(now + 1600).toISOString(), reply_to_id: null, edited_at: null, is_deleted: false, author };
 }
 
-/** Lightweight room-specific ambient activity. */
+/**
+ * Natural-looking ambient AI/community activity. It is deliberately gated behind
+ * a recent real member message so demo accounts do not talk to themselves on an
+ * empty room or jump in before the real member. The timestamp is always after
+ * the real message and is persisted locally to avoid duplicate bursts on reload.
+ */
 export function buildDemoAmbientMessage(roomId: string): MessageWithAuthor | null {
+  if (typeof window === "undefined") return null;
   const now = Date.now();
+  const realAt = Number(window.localStorage.getItem(`diwan:last-real-message:${roomId}`) || 0);
+  if (!realAt || now - realAt < 2500) return null;
+  const lastAiAt = Number(window.localStorage.getItem(`diwan:last-ai-message:${roomId}`) || 0);
+  if (now - lastAiAt < 18_000) return null;
   if (now - (recentlyAmbient.get(roomId) ?? 0) < 18_000) return null;
   recentlyAmbient.set(roomId, now);
-  const pool = roomPools[roomKey(roomId)] ?? roomPools["general"]!;
-  const author = authorFor(roomId, Math.floor(now / 18_000));
-  return { id: `demo-ambient-${roomId}-${now}`, room_id: roomId, user_id: author.id, content: pool[Math.floor(Math.random() * pool.length)]!, created_at: new Date(now).toISOString(), reply_to_id: null, edited_at: null, is_deleted: false, author };
+  window.localStorage.setItem(`diwan:last-ai-message:${roomId}`, String(now));
+  const pool = roomPools[roomKey(roomId)] ?? roomPools.general!;
+  const author = authorFor(roomId, Math.floor(realAt / 1000));
+  return { id: `ai-ambient-${roomId}-${now}`, room_id: roomId, user_id: author.id, content: pool[Math.floor(Math.random() * pool.length)]!, created_at: new Date(now).toISOString(), reply_to_id: null, edited_at: null, is_deleted: false, author };
 }
