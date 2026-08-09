@@ -7,6 +7,7 @@ export const MESSAGE_PAGE_SIZE = 40;
 export const MAX_MESSAGE_LENGTH = 2000;
 
 type AIReplyHandler = (reply: MessageWithAuthor) => void;
+const recentAIContent = new Map<string, string[]>();
 
 /** Only real member messages are loaded as persistent conversation history. */
 export async function fetchMessagePage(roomId: string, before?: string | null): Promise<MessageWithAuthor[]> {
@@ -32,25 +33,46 @@ const fallbackReplies = [
   "إذا أحد يعرف مكان زين لا يبخل علينا ☕", "اليوم الغرفة شكلها راح تصير سوالف 😄", "شنو رأيكم نسويها بهالشكل؟ 👌",
 ];
 
+function uniqueAIContent(roomId: string, candidate: string, salt: number, source: string) {
+  const normalized = candidate.trim().replace(/\s+/g, " ");
+  const recent = recentAIContent.get(roomId) ?? [];
+  if (normalized && !recent.includes(normalized)) {
+    recentAIContent.set(roomId, [...recent, normalized].slice(-6));
+    return normalized;
+  }
+  const seed = Math.abs([...`${roomId}:${source}:${salt}:${recent.length}`].reduce((n, c) => n * 33 + c.charCodeAt(0), 7));
+  for (let offset = 0; offset < fallbackReplies.length; offset += 1) {
+    const fallback = fallbackReplies[(seed + offset) % fallbackReplies.length]!;
+    if (!recent.includes(fallback)) {
+      recentAIContent.set(roomId, [...recent, fallback].slice(-6));
+      return fallback;
+    }
+  }
+  return normalized || "إي والله 😄";
+}
+
 function fallbackReply(author: Profile, roomId: string, source: string, salt: number): MessageWithAuthor {
-  const index = Math.abs([...`${roomId}:${source}:${salt}`].reduce((n, c) => n * 33 + c.charCodeAt(0), 7)) % fallbackReplies.length;
+  const content = uniqueAIContent(roomId, "", salt, source);
   const now = Date.now() + salt * 1400;
-  return { id: `ai-fallback-${roomId}-${now}`, room_id: roomId, user_id: author.id, content: fallbackReplies[index]!, created_at: new Date(now).toISOString(), reply_to_id: null, edited_at: null, is_deleted: false, author };
+  return { id: `ai-fallback-${roomId}-${now}-${salt}`, room_id: roomId, user_id: author.id, content, created_at: new Date(now).toISOString(), reply_to_id: null, edited_at: null, is_deleted: false, author };
 }
 
 async function requestAIRoomReply(roomId: string, message: string, salt: number, onReply?: AIReplyHandler) {
   const author = aiAuthorFor(roomId, salt);
   try {
+    const recent = (recentAIContent.get(roomId) ?? []).slice(-4);
     const { data, error } = await supabase.functions.invoke("diwan-ai-room", {
       body: {
         roomId, roomName: roomId, message, language: "ar",
         persona: author.display_name || author.username || "عضو من ديوان",
-        instruction: "رد كعضو طبيعي في غرفة عربية. لا تكرر نفس الصياغة. استخدم لهجة عراقية/عربية خفيفة حسب السياق، وتجنب الإطالة والرسائل الرسمية. لا تدّعي أنك إنسان حقيقي؛ هذا حساب AI مجتمعي.",
+        recentReplies: recent,
+        instruction: `رد كعضو مجتمعي عربي بشكل طبيعي ومختصر. لا تكرر أي رد سابق. استخدم أسلوباً مختلفاً عن الأعضاء الآخرين، ولهجة عراقية/عربية خفيفة حسب السياق، ولا تجعل كل رد يبدأ أو ينتهي بنفس الطريقة. ${salt > 1 ? "هذا رد متابعة؛ أضف فكرة أو سؤالاً جديداً بدل إعادة كلام الرسالة السابقة." : "ابدأ برد مستقل ومناسب لسياق الرسالة."}`,
       },
     });
     if (!error && data?.text && onReply) {
+      const content = uniqueAIContent(roomId, String(data.text), salt, message);
       const now = Date.now() + salt * 1400;
-      onReply({ id: `ai-live-${roomId}-${now}-${salt}`, room_id: roomId, user_id: author.id, content: String(data.text).trim(), created_at: new Date(now).toISOString(), reply_to_id: null, edited_at: null, is_deleted: false, author });
+      onReply({ id: `ai-live-${roomId}-${now}-${salt}`, room_id: roomId, user_id: author.id, content, created_at: new Date(now).toISOString(), reply_to_id: null, edited_at: null, is_deleted: false, author });
       return;
     }
   } catch {
@@ -66,15 +88,11 @@ export async function sendMessage(input: { roomId: string; userId: string; conte
   if (error) throw error;
   if (typeof window !== "undefined") window.localStorage.setItem(`diwan:last-real-message:${input.roomId}`, String(Date.now()));
 
-  // Wake a rotating group of AI community members after a real message.
+  // Keep the room lively without flooding it: at most two varied community replies per real message.
   void requestAIRoomReply(input.roomId, content, 1, input.onAIReply);
   if (input.onAIReply && typeof window !== "undefined") {
-    const secondDelay = 2600 + Math.floor(Math.random() * 2200);
+    const secondDelay = 2800 + Math.floor(Math.random() * 2600);
     window.setTimeout(() => void requestAIRoomReply(input.roomId, content, 2, input.onAIReply), secondDelay);
-    if (Math.random() > 0.55) {
-      const thirdDelay = secondDelay + 3000 + Math.floor(Math.random() * 3000);
-      window.setTimeout(() => void requestAIRoomReply(input.roomId, content, 3, input.onAIReply), thirdDelay);
-    }
   }
 }
 
