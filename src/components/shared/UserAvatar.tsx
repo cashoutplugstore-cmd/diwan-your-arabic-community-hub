@@ -7,6 +7,7 @@ import { myRolesQuery } from "@/services/roles.service";
 import { profileQuery } from "@/services/profiles.service";
 import { looseDb } from "@/integrations/supabase/loose-db";
 
+// Role-aware identity badge used across chat, members and profile surfaces.
 type Role = "admin" | "moderator" | "vip" | "speaker";
 type Props = { name?: string | null | undefined; src?: string | null | undefined; size?: "sm" | "md" | "lg" | undefined; status?: string | null | undefined; role?: Role | null | undefined; className?: string | undefined; showMemberBadge?: boolean | undefined; autoCurrentRole?: boolean | undefined };
 const sizes = { sm: "size-8", md: "size-10", lg: "size-16" };
