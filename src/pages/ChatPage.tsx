@@ -1,10 +1,348 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, Ban, ChevronUp, Copy, Flag, MessagesSquare, MoreVertical, Reply, SendHorizonal, ShieldOff, UserX, VolumeX, X } from "lucide-react";
+import { ArrowDown, Ban, ChevronUp, Copy, Flag, Hash, MessagesSquare, MoreVertical, Reply, SendHorizonal, ShieldOff, UserX, Users, VolumeX, X } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button"; import { Badge } from "@/components/ui/badge"; import { Textarea } from "@/components/ui/textarea"; import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"; import { EmptyState } from "@/components/shared/EmptyState"; import { MessagesSkeleton } from "@/components/shared/Loaders"; import { UserAvatar } from "@/components/shared/UserAvatar"; import { MembersPanel } from "@/components/chat/MembersPanel"; import { VoiceRoomDock } from "@/components/voice/VoiceRoomDock"; import { useAuth } from "@/contexts/auth-context"; import { useI18n } from "@/contexts/i18n-context"; import { useSounds } from "@/contexts/sound-context"; import { useRoomPresence } from "@/hooks/use-presence"; import { useRealtimeMessages } from "@/hooks/use-realtime-messages"; import { dayKey, dayLabel, relativeTime, timeOfDay } from "@/lib/time"; import { supabase } from "@/integrations/supabase/client"; import { MAX_MESSAGE_LENGTH, MESSAGE_PAGE_SIZE, fetchMessagePage, sendMessage } from "@/services/messages.service"; import { profileQuery } from "@/services/profiles.service"; import { myRolesQuery } from "@/services/roles.service"; import { blockUser, myBlocksQuery, restrictInRoom, roomRestrictionsQuery } from "@/services/moderation.service"; import { roomMembersQuery, roomQuery, roomsWithStatsQuery } from "@/services/rooms.service"; import type { Message, MessageWithAuthor, Profile } from "@/types";
-const SEND_COOLDOWN_MS=1200;
-export function ChatIndexPage(){const{t,locale}=useI18n();const rooms=useQuery(roomsWithStatsQuery());return <div className="space-y-4"><h1 className="font-display text-2xl font-extrabold">{t.nav.chat}</h1>{rooms.isLoading?<MessagesSkeleton/>:(rooms.data??[]).length===0?<EmptyState icon={MessagesSquare} title={t.common.empty} description={t.home.heroSubtitle}/>:<ul className="space-y-2">{(rooms.data??[]).map(room=><li key={room.id}><Link to="/chat/$slug" params={{slug:room.slug}} className="glass flex items-center gap-3 rounded-2xl p-4"><UserAvatar name={room.name} size="md"/><span className="min-w-0 flex-1"><span className="block truncate font-medium">{room.name}</span><span className="block truncate text-sm text-muted-foreground">{room.description??"—"}</span></span><span className="text-xs text-muted-foreground">{relativeTime(room.last_message_at??room.last_activity_at,locale)}</span></Link></li>)}</ul>}</div>}
-function highlight(content:string){return content.split(/(@[\p{L}\p{N}_.-]+)/gu).map((part,index)=>part.startsWith("@")?<span key={index} className="rounded bg-secondary px-1 font-medium">{part}</span>:<span key={index}>{part}</span>)}
-export function ChatRoomPage({slug}:{slug:string}){const{t,locale}=useI18n();const{user}=useAuth();const qc=useQueryClient();const{play}=useSounds();const[draft,setDraft]=useState("");const[replyTo,setReplyTo]=useState<MessageWithAuthor|null>(null);const[atBottom,setAtBottom]=useState(true);const[unseen,setUnseen]=useState(0);const scrollRef=useRef<HTMLDivElement>(null);const bottomRef=useRef<HTMLDivElement>(null);const lastSentAt=useRef(0);const lastSentBody=useRef("");const room=useQuery(roomQuery(slug));const roomId=room.data?.id;const profile=useQuery(profileQuery(user?.id));const roles=useQuery(myRolesQuery(user?.id));const members=useQuery(roomMembersQuery(roomId));const blocks=useQuery(myBlocksQuery(user?.id));const restrictions=useQuery(roomRestrictionsQuery(roomId));const memberIds=useMemo(()=>[...(members.data??[]).map(m=>m.id)].filter(Boolean),[members.data]);const memberRoles=useQuery({queryKey:["chat-member-roles",roomId,memberIds.join(",")],enabled:memberIds.length>0,queryFn:async()=>{const{data,error}=await supabase.from("user_roles").select("user_id,role").in("user_id",memberIds);if(error)throw error;return data??[]},staleTime:30000});const roleById=useMemo(()=>{const map=new Map<string,"admin"|"moderator">();for(const r of memberRoles.data??[]){if(r.role==="admin")map.set(r.user_id,"admin");else if(r.role==="moderator"&&!map.has(r.user_id))map.set(r.user_id,"moderator")}return map},[memberRoles.data]);const messages=useInfiniteQuery({queryKey:["messages",roomId],enabled:!!roomId,initialPageParam:null as string|null,queryFn:({pageParam})=>fetchMessagePage(roomId!,pageParam),getNextPageParam:last=>last.length<MESSAGE_PAGE_SIZE?undefined:last[0]?.created_at});const presenceMe=useMemo(()=>user?{userId:user.id,displayName:profile.data?.display_name||profile.data?.username||"عضو",avatarUrl:profile.data?.avatar_url??null}:null,[user,profile.data]);const presence=useRoomPresence(roomId,presenceMe);const blockedIds=useMemo(()=>new Set((blocks.data??[]).map(b=>b.blocked_id)),[blocks.data]);const myRestrictions=useMemo(()=>(restrictions.data??[]).filter(r=>r.user_id===user?.id),[restrictions.data,user?.id]);const isBanned=myRestrictions.some(r=>r.kind==="ban");const isMuted=myRestrictions.some(r=>r.kind==="mute");const canModerate=!!roles.data?.isAdmin||!!roles.data?.isModerator||room.data?.owner_id===user?.id;const items=useMemo(()=>{const flat=[...(messages.data?.pages??[])].reverse().flat();const seen=new Set<string>();return flat.filter(m=>{if(seen.has(m.id))return false;seen.add(m.id);return!blockedIds.has(m.user_id)})},[messages.data,blockedIds]);const byId=useMemo(()=>new Map(items.map(m=>[m.id,m])),[items]);const appendIncoming=useCallback(async(message:Message)=>{if(!roomId)return;let author:Profile|null=(members.data??[]).find(m=>m.id===message.user_id)??null;if(!author){const{data}=await supabase.from("profiles").select("*").eq("id",message.user_id).maybeSingle();author=data??null}qc.setQueryData<any>(["messages",roomId],prev=>{if(!prev)return prev;const pages=prev.pages.map((p:any)=>p.slice());if(!pages[0]||pages[0].some((m:any)=>m.id===message.id))return prev;pages[0].push({...message,author});return{...prev,pages}});if(message.user_id!==user?.id){play("message");if(!atBottom)setUnseen(c=>c+1)}},[roomId,members.data,qc,user?.id,play,atBottom]);useRealtimeMessages(roomId,{onInsert:m=>void appendIncoming(m),onChange:m=>qc.setQueryData<any>(["messages",roomId],prev=>prev?{...prev,pages:prev.pages.map((p:any)=>p.map((x:any)=>x.id===m.id?{...x,...m}:x))}:prev)});useEffect(()=>{if(atBottom)bottomRef.current?.scrollIntoView({block:"end"})},[items.length,atBottom]);const onScroll=()=>{const e=scrollRef.current;if(!e)return;const near=e.scrollHeight-e.scrollTop-e.clientHeight<120;setAtBottom(near);if(near)setUnseen(0)};const send=useMutation({mutationFn:(content:string)=>sendMessage({roomId:roomId!,userId:user!.id,content,replyToId:replyTo?.id??null}),onMutate:content=>{const optimistic:any={id:`optimistic-${crypto.randomUUID()}`,room_id:roomId!,user_id:user!.id,content,created_at:new Date().toISOString(),reply_to_id:replyTo?.id??null,edited_at:null,is_deleted:false,author:profile.data??null};qc.setQueryData<any>(["messages",roomId],prev=>{if(!prev)return prev;const pages=prev.pages.map((p:any)=>p.slice());pages[0]?.push(optimistic);return{...prev,pages}});return{}},onError:e=>toast.error((e as Error).message),onSuccess:()=>{setReplyTo(null);void qc.invalidateQueries({queryKey:["messages",roomId]})}});const moderate=useMutation({mutationFn:async(input:{userId:string;kind:"ban"|"mute"})=>{if(!user||!roomId)throw new Error("غير مصرح");await restrictInRoom({roomId,userId:input.userId,kind:input.kind,createdBy:user.id});},onSuccess:async(_,input)=>{await qc.invalidateQueries({queryKey:["room_moderation",roomId]});await qc.invalidateQueries({queryKey:["room_members",roomId]});toast.success(input.kind==="ban"?"تم حظر وطرد العضو من الغرفة":"تم كتم العضو")},onError:e=>toast.error((e as Error).message)});const block=useMutation({mutationFn:(targetId:string)=>{if(!user)throw new Error("غير مصرح");return blockUser(user.id,targetId)},onSuccess:()=>{void qc.invalidateQueries({queryKey:["user_blocks",user?.id]});toast.success("تم حظر العضو لديك")},onError:e=>toast.error((e as Error).message)});function submit(){const content=draft.trim();if(!content||!roomId||!user)return;if(content.length>MAX_MESSAGE_LENGTH)return;const now=Date.now();if(now-lastSentAt.current<SEND_COOLDOWN_MS)return;if(content===lastSentBody.current&&now-lastSentAt.current<30000)return;lastSentAt.current=now;lastSentBody.current=content;setDraft("");send.mutate(content)}if(room.isLoading)return <MessagesSkeleton/>;if(!room.data)return <EmptyState icon={MessagesSquare} title={t.common.empty} description={t.common.error}/>;return <div className="flex gap-4"><div className="glass-strong flex h-[calc(100dvh-190px)] min-w-0 flex-1 flex-col overflow-hidden rounded-3xl lg:h-[calc(100dvh-140px)]"><header className="flex items-center gap-3 border-b px-4 py-3"><UserAvatar name={room.data.name} size="sm"/><div className="min-w-0 flex-1"><h1 className="truncate font-display text-base font-bold">{room.data.name}</h1><p className="truncate text-xs text-muted-foreground">{room.data.description??"—"}</p></div><Badge variant="secondary">{presence.online.length} {t.chat.online}</Badge></header><div ref={scrollRef} onScroll={onScroll} className="relative flex-1 space-y-3 overflow-y-auto scrollbar-slim p-4">{messages.hasNextPage?<div className="flex justify-center"><Button variant="ghost" size="sm" onClick={()=>void messages.fetchNextPage()}><ChevronUp className="size-4"/>{t.chat.loadMore}</Button></div>:null}{messages.isLoading?<MessagesSkeleton/>:items.length===0?<EmptyState icon={MessagesSquare} title={t.chat.noMessages} description={t.chat.startConversation}/>:items.map((message,index)=>{const mine=message.user_id===user?.id;const prev=items[index-1];const showDay=!prev||dayKey(prev.created_at)!==dayKey(message.created_at);const parent=message.reply_to_id?byId.get(message.reply_to_id):undefined;const name=message.author?.display_name||message.author?.username||"—";const messageRole=roleById.get(message.user_id);const admin=messageRole==="admin";const mod=messageRole==="moderator";const targetIsSelf=message.user_id===user?.id;const bubble=admin?"border border-rose-400/40 bg-gradient-to-br from-rose-500/15 to-pink-500/10 text-foreground shadow-[0_0_24px_rgba(244,63,94,.12)]":mod?"border border-sky-400/25 bg-sky-400/10 text-foreground":mine?"bg-primary text-primary-foreground":"bg-secondary/75 text-secondary-foreground";return <div key={message.id} className="space-y-3">{showDay?<div className="flex items-center gap-3"><span className="h-px flex-1 bg-border"/><span className="text-[11px] text-muted-foreground">{dayLabel(message.created_at,locale,t.chat)}</span><span className="h-px flex-1 bg-border"/></div>:null}<div className={mine?"group flex flex-row-reverse items-end gap-3":"group flex items-end gap-3"}><UserAvatar name={name} src={message.author?.avatar_url} size="sm" status={presence.onlineIds.has(message.user_id)?"online":undefined} role={messageRole??null}/><div className="min-w-0 max-w-[78%]"><div className={"rounded-2xl px-4 py-2.5 "+(mine?"rounded-te-sm":"rounded-ts-sm")+" "+bubble}><div className="mb-1 flex items-center gap-2"><p className={admin?"text-xs font-black text-rose-300 drop-shadow-[0_0_8px_rgba(244,63,94,.4)]":mod?"text-xs font-bold text-sky-300":"text-xs font-semibold opacity-70"}>{admin?"🌹 👑 ":""}{name}</p>{admin?<span className="rounded-full border border-rose-400/40 bg-rose-500/10 px-1.5 py-0.5 text-[8px] font-black text-rose-300">👑 ADMIN</span>:mod?<span className="rounded-full border border-sky-400/40 bg-sky-400/10 px-1.5 py-0.5 text-[8px] font-black text-sky-300">🛡 MOD</span>:null}</div>{parent?<p className="mb-2 truncate rounded-lg border-s-2 border-current/30 ps-2 text-[11px] opacity-70">{parent.author?.display_name||parent.author?.username}: {parent.content}</p>:null}<p className="whitespace-pre-wrap break-words text-sm leading-6">{highlight(message.content)}</p><p className="mt-1 text-[10px] opacity-55">{timeOfDay(message.created_at,locale)}</p></div></div>{!message.is_deleted&&!message.id.startsWith("optimistic-")?<DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="size-8 self-center opacity-0 group-hover:opacity-100"><MoreVertical className="size-4"/></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={()=>setReplyTo(message)}><Reply className="size-4"/>{t.chat.reply}</DropdownMenuItem><DropdownMenuItem onClick={()=>void navigator.clipboard.writeText(message.content)}><Copy className="size-4"/>{t.chat.copy}</DropdownMenuItem>{!targetIsSelf&&!mine?<><DropdownMenuItem onClick={()=>toast.info("نظام الإبلاغ متاح من لوحة الإشراف")}><Flag className="size-4"/>إبلاغ عن العضو</DropdownMenuItem><DropdownMenuItem onClick={()=>block.mutate(message.user_id)} disabled={block.isPending}><UserX className="size-4"/>حظر هذا العضو لدي</DropdownMenuItem>{canModerate?<><DropdownMenuSeparator/><DropdownMenuItem onClick={()=>moderate.mutate({userId:message.user_id,kind:"mute"})} disabled={moderate.isPending}><VolumeX className="size-4"/>كتم العضو</DropdownMenuItem><DropdownMenuItem className="text-destructive" onClick={()=>moderate.mutate({userId:message.user_id,kind:"ban"})} disabled={moderate.isPending}><Ban className="size-4"/>حظر وطرد من الغرفة</DropdownMenuItem></>:null}</>:null}</DropdownMenuContent></DropdownMenu>:null}</div></div>})}<div ref={bottomRef}/></div>{unseen>0&&!atBottom?<Button size="sm" className="absolute bottom-24 start-1/2 -translate-x-1/2" onClick={()=>{setAtBottom(true);bottomRef.current?.scrollIntoView({behavior:"smooth"})}}><ArrowDown className="size-4"/>{unseen}</Button>:null}{replyTo?<div className="flex items-center gap-2 border-t bg-secondary/40 px-4 py-2 text-xs"><Reply className="size-3.5 text-primary"/><span className="min-w-0 flex-1 truncate">{replyTo.author?.display_name||replyTo.author?.username}: {replyTo.content}</span><Button variant="ghost" size="icon" onClick={()=>setReplyTo(null)}><X className="size-3.5"/></Button></div>:null}{isBanned||isMuted?<div className="border-t bg-destructive/10 p-3 text-sm text-destructive"><ShieldOff className="me-2 inline size-4"/>{isBanned?t.chat.banned:t.chat.muted}</div>:<><VoiceRoomDock roomName={room.data.name}/><form className="flex items-end gap-2 border-t p-3" onSubmit={e=>{e.preventDefault();submit()}}><Textarea value={draft} onChange={e=>setDraft(e.target.value.slice(0,MAX_MESSAGE_LENGTH))} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();submit()}}} placeholder={t.common.messagePlaceholder} className="min-h-11 resize-none"/><Button type="submit" size="icon" disabled={!draft.trim()||send.isPending||!user}><SendHorizonal className="size-4"/></Button></form></>}</div><MembersPanel members={members.data??[]} presence={presence.entries} roomId={roomId}/></div>}
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { MessagesSkeleton } from "@/components/shared/Loaders";
+import { UserAvatar } from "@/components/shared/UserAvatar";
+import { MembersPanel } from "@/components/chat/MembersPanel";
+import { VoiceRoomDock } from "@/components/voice/VoiceRoomDock";
+import { useAuth } from "@/contexts/auth-context";
+import { useI18n } from "@/contexts/i18n-context";
+import { useSounds } from "@/contexts/sound-context";
+import { useRoomPresence } from "@/hooks/use-presence";
+import { useRealtimeMessages } from "@/hooks/use-realtime-messages";
+import { dayKey, dayLabel, relativeTime, timeOfDay } from "@/lib/time";
+import { supabase } from "@/integrations/supabase/client";
+import { MAX_MESSAGE_LENGTH, MESSAGE_PAGE_SIZE, fetchMessagePage, sendMessage } from "@/services/messages.service";
+import { profileQuery } from "@/services/profiles.service";
+import { myRolesQuery } from "@/services/roles.service";
+import { blockUser, myBlocksQuery, restrictInRoom, roomRestrictionsQuery } from "@/services/moderation.service";
+import { roomMembersQuery, roomQuery, roomsWithStatsQuery } from "@/services/rooms.service";
+import type { Message, MessageWithAuthor, Profile } from "@/types";
+
+const SEND_COOLDOWN_MS = 1200;
+
+export function ChatIndexPage() {
+  const { t, locale } = useI18n();
+  const rooms = useQuery(roomsWithStatsQuery());
+
+  return (
+    <div className="space-y-4">
+      <h1 className="font-display text-2xl font-extrabold">{t.nav.chat}</h1>
+      {rooms.isLoading ? <MessagesSkeleton /> : (rooms.data ?? []).length === 0 ? (
+        <EmptyState icon={MessagesSquare} title={t.common.empty} description={t.home.heroSubtitle} />
+      ) : (
+        <ul className="space-y-2">
+          {(rooms.data ?? []).map((room) => (
+            <li key={room.id}>
+              <Link to="/chat/$slug" params={{ slug: room.slug }} className="glass flex items-center gap-3 rounded-2xl p-4">
+                <UserAvatar name={room.name} size="md" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{room.name}</span>
+                  <span className="block truncate text-sm text-muted-foreground">{room.description ?? "—"}</span>
+                </span>
+                <span className="text-xs text-muted-foreground">{relativeTime(room.last_message_at ?? room.last_activity_at, locale)}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function highlight(content: string) {
+  return content.split(/(@[\p{L}\p{N}_.-]+)/gu).map((part, index) =>
+    part.startsWith("@") ? <span key={index} className="rounded bg-secondary px-1 font-medium">{part}</span> : <span key={index}>{part}</span>,
+  );
+}
+
+export function ChatRoomPage({ slug }: { slug: string }) {
+  const { t, locale } = useI18n();
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const { play } = useSounds();
+  const [draft, setDraft] = useState("");
+  const [replyTo, setReplyTo] = useState<MessageWithAuthor | null>(null);
+  const [atBottom, setAtBottom] = useState(true);
+  const [unseen, setUnseen] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const lastSentAt = useRef(0);
+  const lastSentBody = useRef("");
+
+  const room = useQuery(roomQuery(slug));
+  const roomId = room.data?.id;
+  const rooms = useQuery(roomsWithStatsQuery());
+  const profile = useQuery(profileQuery(user?.id));
+  const roles = useQuery(myRolesQuery(user?.id));
+  const members = useQuery(roomMembersQuery(roomId));
+  const blocks = useQuery(myBlocksQuery(user?.id));
+  const restrictions = useQuery(roomRestrictionsQuery(roomId));
+  const memberIds = useMemo(() => [...(members.data ?? []).map((m) => m.id)].filter(Boolean), [members.data]);
+
+  const memberRoles = useQuery({
+    queryKey: ["chat-member-roles", roomId, memberIds.join(",")],
+    enabled: memberIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("user_roles").select("user_id,role").in("user_id", memberIds);
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 30000,
+  });
+
+  const roleById = useMemo(() => {
+    const map = new Map<string, "admin" | "moderator">();
+    for (const row of memberRoles.data ?? []) {
+      if (row.role === "admin") map.set(row.user_id, "admin");
+      else if (row.role === "moderator" && !map.has(row.user_id)) map.set(row.user_id, "moderator");
+    }
+    return map;
+  }, [memberRoles.data]);
+
+  const messages = useInfiniteQuery({
+    queryKey: ["messages", roomId],
+    enabled: !!roomId,
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => fetchMessagePage(roomId!, pageParam),
+    getNextPageParam: (last) => last.length < MESSAGE_PAGE_SIZE ? undefined : last[0]?.created_at,
+  });
+
+  const presenceMe = useMemo(() => user ? {
+    userId: user.id,
+    displayName: profile.data?.display_name || profile.data?.username || "عضو",
+    avatarUrl: profile.data?.avatar_url ?? null,
+  } : null, [user, profile.data]);
+  const presence = useRoomPresence(roomId, presenceMe);
+  const blockedIds = useMemo(() => new Set((blocks.data ?? []).map((b) => b.blocked_id)), [blocks.data]);
+  const myRestrictions = useMemo(() => (restrictions.data ?? []).filter((r) => r.user_id === user?.id), [restrictions.data, user?.id]);
+  const isBanned = myRestrictions.some((r) => r.kind === "ban");
+  const isMuted = myRestrictions.some((r) => r.kind === "mute");
+  const canModerate = !!roles.data?.isAdmin || !!roles.data?.isModerator || room.data?.owner_id === user?.id;
+
+  const items = useMemo(() => {
+    const flat = [...(messages.data?.pages ?? [])].reverse().flat();
+    const seen = new Set<string>();
+    return flat.filter((message) => {
+      if (seen.has(message.id)) return false;
+      seen.add(message.id);
+      return !blockedIds.has(message.user_id);
+    });
+  }, [messages.data, blockedIds]);
+  const byId = useMemo(() => new Map(items.map((m) => [m.id, m])), [items]);
+
+  const appendIncoming = useCallback(async (message: Message) => {
+    if (!roomId) return;
+    let author: Profile | null = (members.data ?? []).find((m) => m.id === message.user_id) ?? null;
+    if (!author) {
+      const { data } = await supabase.from("profiles").select("*").eq("id", message.user_id).maybeSingle();
+      author = data ?? null;
+    }
+    qc.setQueryData<any>(["messages", roomId], (prev) => {
+      if (!prev) return prev;
+      const pages = prev.pages.map((p: any) => p.slice());
+      if (!pages[0] || pages[0].some((m: any) => m.id === message.id)) return prev;
+      pages[0].push({ ...message, author });
+      return { ...prev, pages };
+    });
+    if (message.user_id !== user?.id) {
+      play("message");
+      if (!atBottom) setUnseen((count) => count + 1);
+    }
+  }, [roomId, members.data, qc, user?.id, play, atBottom]);
+
+  useRealtimeMessages(roomId, {
+    onInsert: (message) => void appendIncoming(message),
+    onChange: (message) => qc.setQueryData<any>(["messages", roomId], (prev) => prev ? { ...prev, pages: prev.pages.map((p: any) => p.map((x: any) => x.id === message.id ? { ...x, ...message } : x)) } : prev),
+  });
+
+  useEffect(() => {
+    if (atBottom) bottomRef.current?.scrollIntoView({ block: "end" });
+  }, [items.length, atBottom]);
+
+  const onScroll = () => {
+    const element = scrollRef.current;
+    if (!element) return;
+    const nearBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 120;
+    setAtBottom(nearBottom);
+    if (nearBottom) setUnseen(0);
+  };
+
+  const send = useMutation({
+    mutationFn: (content: string) => sendMessage({ roomId: roomId!, userId: user!.id, content, replyToId: replyTo?.id ?? null }),
+    onMutate: (content) => {
+      const optimistic: any = {
+        id: `optimistic-${crypto.randomUUID()}`,
+        room_id: roomId!, user_id: user!.id, content,
+        created_at: new Date().toISOString(), reply_to_id: replyTo?.id ?? null,
+        edited_at: null, is_deleted: false, author: profile.data ?? null,
+      };
+      qc.setQueryData<any>(["messages", roomId], (prev) => {
+        if (!prev) return prev;
+        const pages = prev.pages.map((p: any) => p.slice());
+        pages[0]?.push(optimistic);
+        return { ...prev, pages };
+      });
+      return {};
+    },
+    onError: (error) => toast.error((error as Error).message),
+    onSuccess: () => { setReplyTo(null); void qc.invalidateQueries({ queryKey: ["messages", roomId] }); },
+  });
+
+  const moderate = useMutation({
+    mutationFn: async (input: { userId: string; kind: "ban" | "mute" }) => {
+      if (!user || !roomId) throw new Error("غير مصرح");
+      await restrictInRoom({ roomId, userId: input.userId, kind: input.kind, createdBy: user.id });
+    },
+    onSuccess: async (_, input) => {
+      await qc.invalidateQueries({ queryKey: ["room_moderation", roomId] });
+      await qc.invalidateQueries({ queryKey: ["room_members", roomId] });
+      toast.success(input.kind === "ban" ? "تم حظر وطرد العضو من الغرفة" : "تم كتم العضو");
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+
+  const block = useMutation({
+    mutationFn: (targetId: string) => {
+      if (!user) throw new Error("غير مصرح");
+      return blockUser(user.id, targetId);
+    },
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["user_blocks", user?.id] }); toast.success("تم حظر العضو لديك"); },
+    onError: (error) => toast.error((error as Error).message),
+  });
+
+  function submit() {
+    const content = draft.trim();
+    if (!content || !roomId || !user || content.length > MAX_MESSAGE_LENGTH) return;
+    const now = Date.now();
+    if (now - lastSentAt.current < SEND_COOLDOWN_MS) return;
+    if (content === lastSentBody.current && now - lastSentAt.current < 30000) return;
+    lastSentAt.current = now;
+    lastSentBody.current = content;
+    setDraft("");
+    send.mutate(content);
+  }
+
+  if (room.isLoading) return <MessagesSkeleton />;
+  if (!room.data) return <EmptyState icon={MessagesSquare} title={t.common.empty} description={t.common.error} />;
+
+  return (
+    <div className="flex min-h-0 h-[calc(100dvh-175px)] gap-2 overflow-hidden lg:gap-3">
+      <aside className="glass hidden w-[220px] shrink-0 flex-col overflow-hidden rounded-2xl lg:flex">
+        <div className="flex items-center gap-2 border-b px-3 py-3">
+          <Hash className="size-4 text-primary" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-black">الغرف</p>
+            <p className="text-[10px] text-muted-foreground">اختر مدينة للدردشة</p>
+          </div>
+          <Badge variant="secondary" className="text-[10px]">{(rooms.data ?? []).length}</Badge>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-2 scrollbar-slim">
+          {(rooms.data ?? []).map((item) => {
+            const active = item.slug === slug;
+            return (
+              <Link key={item.id} to="/chat/$slug" params={{ slug: item.slug }} className={`mb-1 flex items-center gap-2 rounded-xl px-2.5 py-2.5 transition ${active ? "bg-primary/15 text-primary shadow-sm" : "hover:bg-secondary/70"}`}>
+                <span className={`grid size-7 shrink-0 place-items-center rounded-lg ${active ? "bg-primary/15" : "bg-secondary"}`}><Hash className="size-3.5" /></span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-bold">{item.name}</span>
+                  <span className="block truncate text-[9px] text-muted-foreground">{item.description ?? "غرفة ديوان"}</span>
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      </aside>
+
+      <section className="glass-strong flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl lg:rounded-3xl">
+        <header className="flex shrink-0 items-center gap-3 border-b bg-background/35 px-3 py-2.5 sm:px-4 sm:py-3">
+          <UserAvatar name={room.data.name} size="sm" />
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate font-display text-sm font-black sm:text-base">{room.data.name}</h1>
+            <p className="truncate text-[10px] text-muted-foreground sm:text-xs">{room.data.description ?? "غرفة ديوان"} · اضغط الاسم لعرض الأعضاء</p>
+          </div>
+          <Badge variant="secondary" className="shrink-0 gap-1 px-2 text-[10px] sm:text-xs"><span className="size-1.5 rounded-full bg-emerald-400" />{presence.online.length} {t.chat.online}</Badge>
+        </header>
+
+        <div ref={scrollRef} onScroll={onScroll} className="relative min-h-0 flex-1 overflow-y-auto px-2.5 py-3 scrollbar-slim sm:px-4 sm:py-4">
+          <div className="mx-auto w-full max-w-4xl space-y-2.5">
+            {messages.hasNextPage ? <div className="flex justify-center pb-1"><Button variant="ghost" size="sm" className="h-8 rounded-full text-xs" onClick={() => void messages.fetchNextPage()}><ChevronUp className="size-4" />{t.chat.loadMore}</Button></div> : null}
+            {messages.isLoading ? <MessagesSkeleton /> : items.length === 0 ? <EmptyState icon={MessagesSquare} title={t.chat.noMessages} description={t.chat.startConversation} /> : items.map((message, index) => {
+              const mine = message.user_id === user?.id;
+              const previous = items[index - 1];
+              const showDay = !previous || dayKey(previous.created_at) !== dayKey(message.created_at);
+              const parent = message.reply_to_id ? byId.get(message.reply_to_id) : undefined;
+              const name = message.author?.display_name || message.author?.username || "—";
+              const messageRole = roleById.get(message.user_id);
+              const admin = messageRole === "admin";
+              const mod = messageRole === "moderator";
+              const targetIsSelf = message.user_id === user?.id;
+              const bubble = admin
+                ? "border border-rose-400/35 bg-rose-500/10 shadow-[0_4px_18px_rgba(244,63,94,.08)]"
+                : mod
+                  ? "border border-sky-400/25 bg-sky-400/10"
+                  : mine ? "bg-primary text-primary-foreground" : "bg-secondary/75 text-secondary-foreground";
+              return (
+                <div key={message.id} className="space-y-2">
+                  {showDay ? <div className="flex items-center gap-2 py-1"><span className="h-px flex-1 bg-border" /><span className="rounded-full bg-secondary px-2.5 py-1 text-[9px] font-semibold text-muted-foreground">{dayLabel(message.created_at, locale, t.chat)}</span><span className="h-px flex-1 bg-border" /></div> : null}
+                  <div className={`group flex items-end gap-2 ${mine ? "flex-row-reverse" : ""}`}>
+                    <UserAvatar name={name} src={message.author?.avatar_url} size="sm" status={presence.onlineIds.has(message.user_id) ? "online" : undefined} role={messageRole ?? null} />
+                    <div className={`min-w-0 max-w-[86%] sm:max-w-[72%] ${mine ? "items-end" : "items-start"}`}>
+                      <div className={`rounded-2xl px-3.5 py-2 ${mine ? "rounded-te-md" : "rounded-ts-md"} ${bubble}`}>
+                        <div className="mb-0.5 flex flex-wrap items-center gap-1.5">
+                          <p className={admin ? "text-[10px] font-black text-rose-300" : mod ? "text-[10px] font-bold text-sky-300" : "text-[10px] font-semibold opacity-70"}>{admin ? "🌹 👑 " : ""}{name}</p>
+                          {admin ? <span className="rounded-full border border-rose-400/40 px-1.5 py-0.5 text-[7px] font-black text-rose-300">ADMIN</span> : mod ? <span className="rounded-full border border-sky-400/40 px-1.5 py-0.5 text-[7px] font-black text-sky-300">MOD</span> : null}
+                        </div>
+                        {parent ? <p className="mb-1.5 truncate rounded-lg border-s-2 border-current/25 ps-2 text-[10px] opacity-65">{parent.author?.display_name || parent.author?.username}: {parent.content}</p> : null}
+                        <p className="whitespace-pre-wrap break-words text-[13px] leading-5 sm:text-sm">{highlight(message.content)}</p>
+                        <p className="mt-1 text-[9px] opacity-50">{timeOfDay(message.created_at, locale)}</p>
+                      </div>
+                    </div>
+                    {!message.is_deleted && !message.id.startsWith("optimistic-") ? <DropdownMenu>
+                      <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="size-7 self-center opacity-0 transition group-hover:opacity-100 focus:opacity-100"><MoreVertical className="size-3.5" /></Button></DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => setReplyTo(message)}><Reply className="size-4" />{t.chat.reply}</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => void navigator.clipboard.writeText(message.content)}><Copy className="size-4" />{t.chat.copy}</DropdownMenuItem>
+                        {!targetIsSelf && !mine ? <>
+                          <DropdownMenuItem onClick={() => toast.info("نظام الإبلاغ متاح من لوحة الإشراف")}><Flag className="size-4" />إبلاغ عن العضو</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => block.mutate(message.user_id)} disabled={block.isPending}><UserX className="size-4" />حظر هذا العضو لدي</DropdownMenuItem>
+                          {canModerate ? <><DropdownMenuSeparator /><DropdownMenuItem onClick={() => moderate.mutate({ userId: message.user_id, kind: "mute" })} disabled={moderate.isPending}><VolumeX className="size-4" />كتم العضو</DropdownMenuItem><DropdownMenuItem className="text-destructive" onClick={() => moderate.mutate({ userId: message.user_id, kind: "ban" })} disabled={moderate.isPending}><Ban className="size-4" />حظر وطرد من الغرفة</DropdownMenuItem></> : null}
+                        </> : null}
+                      </DropdownMenuContent>
+                    </DropdownMenu> : null}
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={bottomRef} />
+          </div>
+        </div>
+
+        {unseen > 0 && !atBottom ? <Button size="sm" className="absolute bottom-28 start-1/2 -translate-x-1/2 rounded-full shadow-lg" onClick={() => { setAtBottom(true); bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }}><ArrowDown className="size-4" />{unseen}</Button> : null}
+
+        {replyTo ? <div className="flex shrink-0 items-center gap-2 border-t bg-secondary/35 px-3 py-1.5 text-[10px] sm:px-4"><Reply className="size-3.5 shrink-0 text-primary" /><span className="min-w-0 flex-1 truncate">{replyTo.author?.display_name || replyTo.author?.username}: {replyTo.content}</span><Button variant="ghost" size="icon" className="size-7" onClick={() => setReplyTo(null)}><X className="size-3.5" /></Button></div> : null}
+
+        {isBanned || isMuted ? <div className="shrink-0 border-t bg-destructive/10 p-3 text-sm text-destructive"><ShieldOff className="me-2 inline size-4" />{isBanned ? t.chat.banned : t.chat.muted}</div> : <>
+          <div className="shrink-0 border-t bg-background/30 px-2 pt-1.5"><VoiceRoomDock roomName={room.data.name} /></div>
+          <form className="shrink-0 border-t bg-background/50 p-2.5 sm:p-3" onSubmit={(event) => { event.preventDefault(); submit(); }}>
+            <div className="mx-auto flex max-w-4xl items-end gap-2 rounded-2xl border bg-secondary/45 p-1.5 shadow-sm focus-within:border-primary/40">
+              <Textarea value={draft} onChange={(event) => setDraft(event.target.value.slice(0, MAX_MESSAGE_LENGTH))} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submit(); } }} placeholder={t.common.messagePlaceholder} className="min-h-10 max-h-28 resize-none border-0 bg-transparent px-2 py-2 shadow-none focus-visible:ring-0" />
+              <Button type="submit" size="icon" className="size-10 shrink-0 rounded-xl" disabled={!draft.trim() || send.isPending || !user}><SendHorizonal className="size-4" /></Button>
+            </div>
+          </form>
+        </>}
+      </section>
+
+      <div className="hidden min-h-0 w-[250px] shrink-0 lg:flex">
+        <MembersPanel members={members.data ?? []} presence={presence.entries} roomId={roomId} />
+      </div>
+      <div className="lg:hidden"><MembersPanel members={members.data ?? []} presence={presence.entries} roomId={roomId} /></div>
+    </div>
+  );
+}
