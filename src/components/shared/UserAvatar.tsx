@@ -29,7 +29,7 @@ export function UserAvatar({ name, src, size = "md", status, role, className, sh
     if (profilesError) throw profilesError;
     if (rolesError) throw rolesError;
     return { profiles: (profiles ?? []) as PublicProfile[], roles: (roles ?? []) as PublicRole[] };
-  });
+  } });
   const publicRole = (() => {
     if (!name || role || !publicStaff.data) return null;
     const candidates = publicStaff.data.profiles.filter((p) => p.username === name || p.display_name === name);
