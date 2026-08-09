@@ -10,7 +10,7 @@ const reactions = ["😂", "🤣", "❤️", "😭", "🥹", "😍", "🔥", "�
 
 function daySeed(): number { const d = new Date(); const key = `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`; let h = 2166136261; for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619); return h >>> 0; }
 function hash(value: number): number { let x = value >>> 0; x ^= x << 13; x ^= x >>> 17; x ^= x << 5; return x >>> 0; }
-function pick<T>(items: T[], seed: number): T { return items[hash(seed) % items.length]; }
+function pick<T>(items: T[], seed: number): T { return items[hash(seed) % items.length]!; }
 function profile(id: number, displayName: string): Profile { const now = new Date().toISOString(); return { id: `demo-${String(id).padStart(4, "0")}`, display_name: displayName, username: `demo_${id}`, avatar_url: null, bio: "حساب تجريبي من مجتمع ديوان", status: "online", created_at: now, updated_at: now }; }
 
 export function getDailyDemoProfiles(limit = 120): Profile[] {
@@ -33,7 +33,7 @@ function demoMessageContent(seed: number): string {
 /** Small initial feed for performance; activity is generated on demand instead of rendering thousands of rows. */
 export function getDailyDemoMessages(roomId: string, count = 36): MessageWithAuthor[] {
   const seed = daySeed() ^ roomId.length; const profiles = getDailyDemoProfiles(120); const now = Date.now(); const start = now - 1000 * 60 * 70;
-  return Array.from({ length: count }, (_, index) => { const author = profiles[hash(seed + index * 13) % profiles.length]; return { id: `demo-${roomId}-${daySeed()}-${index}`, room_id: roomId, user_id: author.id, content: demoMessageContent(seed + index * 97), created_at: new Date(start + index * 120000).toISOString(), reply_to_id: null, edited_at: null, is_deleted: false, author }; });
+  return Array.from({ length: count }, (_, index) => { const author = profiles[hash(seed + index * 13) % profiles.length]!; return { id: `demo-${roomId}-${daySeed()}-${index}`, room_id: roomId, user_id: author.id, content: demoMessageContent(seed + index * 97), created_at: new Date(start + index * 120000).toISOString(), reply_to_id: null, edited_at: null, is_deleted: false, author }; });
 }
 
 export const DEMO_MESSAGES = (roomId: string): MessageWithAuthor[] => getDailyDemoMessages(roomId, 36);

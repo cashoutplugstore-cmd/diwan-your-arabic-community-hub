@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, Ban, ChevronUp, Copy, Flag, Hash, MessagesSquare, MoreVertical, Reply, SendHorizonal, ShieldOff, UserX, Users, VolumeX, X } from "lucide-react";
+import { ArrowDown, Ban, Settings2, ShieldCheck, ChevronUp, Copy, Flag, Hash, MessagesSquare, MoreVertical, Reply, SendHorizonal, ShieldOff, UserX, Users, VolumeX, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,8 @@ import { profileQuery } from "@/services/profiles.service";
 import { myRolesQuery } from "@/services/roles.service";
 import { blockUser, myBlocksQuery, restrictInRoom, roomRestrictionsQuery } from "@/services/moderation.service";
 import { roomMembersQuery, roomQuery, roomsWithStatsQuery } from "@/services/rooms.service";
+import { EMPTY_PERMISSIONS, roomPermissionsQuery } from "@/services/room-roles.service";
+import { RoomRolesDialog } from "@/components/chat/RoomRolesDialog";
 import type { Message, MessageWithAuthor, Profile } from "@/types";
 
 const SEND_COOLDOWN_MS = 1200;
@@ -71,6 +73,7 @@ export function ChatRoomPage({ slug }: { slug: string }) {
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<MessageWithAuthor | null>(null);
   const [atBottom, setAtBottom] = useState(true);
+  const [rolesOpen, setRolesOpen] = useState(false);
   const [unseen, setUnseen] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -125,7 +128,10 @@ export function ChatRoomPage({ slug }: { slug: string }) {
   const myRestrictions = useMemo(() => (restrictions.data ?? []).filter((r) => r.user_id === user?.id), [restrictions.data, user?.id]);
   const isBanned = myRestrictions.some((r) => r.kind === "ban");
   const isMuted = myRestrictions.some((r) => r.kind === "mute");
-  const canModerate = !!roles.data?.isAdmin || !!roles.data?.isModerator || room.data?.owner_id === user?.id;
+  const permissionsQuery = useQuery(roomPermissionsQuery(roomId, user?.id));
+  const permissions = permissionsQuery.data ?? EMPTY_PERMISSIONS;
+  const canModerate = permissions.canModerate || !!roles.data?.isAdmin || !!roles.data?.isModerator || room.data?.owner_id === user?.id;
+  const canManageRoles = permissions.canManageRoles || !!roles.data?.isAdmin || room.data?.owner_id === user?.id;
 
   const items = useMemo(() => {
     const flat = [...(messages.data?.pages ?? [])].reverse().flat();
@@ -145,7 +151,7 @@ export function ChatRoomPage({ slug }: { slug: string }) {
       const { data } = await supabase.from("profiles").select("*").eq("id", message.user_id).maybeSingle();
       author = data ?? null;
     }
-    qc.setQueryData<any>(["messages", roomId], (prev) => {
+    qc.setQueryData<any>(["messages", roomId], (prev: any) => {
       if (!prev) return prev;
       const pages = prev.pages.map((p: any) => p.slice());
       if (!pages[0] || pages[0].some((m: any) => m.id === message.id)) return prev;
@@ -160,7 +166,7 @@ export function ChatRoomPage({ slug }: { slug: string }) {
 
   useRealtimeMessages(roomId, {
     onInsert: (message) => void appendIncoming(message),
-    onChange: (message) => qc.setQueryData<any>(["messages", roomId], (prev) => prev ? { ...prev, pages: prev.pages.map((p: any) => p.map((x: any) => x.id === message.id ? { ...x, ...message } : x)) } : prev),
+    onChange: (message) => qc.setQueryData<any>(["messages", roomId], (prev: any) => prev ? { ...prev, pages: prev.pages.map((p: any) => p.map((x: any) => x.id === message.id ? { ...x, ...message } : x)) } : prev),
   });
 
   useEffect(() => {
@@ -184,7 +190,7 @@ export function ChatRoomPage({ slug }: { slug: string }) {
         created_at: new Date().toISOString(), reply_to_id: replyTo?.id ?? null,
         edited_at: null, is_deleted: false, author: profile.data ?? null,
       };
-      qc.setQueryData<any>(["messages", roomId], (prev) => {
+      qc.setQueryData<any>(["messages", roomId], (prev: any) => {
         if (!prev) return prev;
         const pages = prev.pages.map((p: any) => p.slice());
         pages[0]?.push(optimistic);
@@ -267,8 +273,24 @@ export function ChatRoomPage({ slug }: { slug: string }) {
             <h1 className="truncate font-display text-sm font-black sm:text-base">{room.data.name}</h1>
             <p className="truncate text-[10px] text-muted-foreground sm:text-xs">{room.data.description ?? "غرفة ديوان"} · اضغط الاسم لعرض الأعضاء</p>
           </div>
-          <Badge variant="secondary" className="shrink-0 gap-1 px-2 text-[10px] sm:text-xs"><span className="size-1.5 rounded-full bg-emerald-400" />{presence.online.length} {t.chat.online}</Badge>
+          <Badge variant="secondary" className="hidden shrink-0 gap-1 px-2 text-[10px] sm:inline-flex sm:text-xs"><span className="size-1.5 rounded-full bg-emerald-400" />{presence.online.length} {t.chat.online}</Badge>
+          {canManageRoles ? (
+            <>
+              <Button type="button" size="sm" variant="outline" className="hidden h-9 shrink-0 gap-1.5 rounded-xl text-xs sm:inline-flex" onClick={() => setRolesOpen(true)}>
+                <ShieldCheck className="size-4" />تعديل الرتب والصلاحيات
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" size="icon" variant="outline" className="size-9 shrink-0 rounded-xl sm:hidden" aria-label="إدارة الغرفة"><Settings2 className="size-4" /></Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-56">
+                  <DropdownMenuItem onClick={() => setRolesOpen(true)}><ShieldCheck className="size-4" />تعديل الرتب والصلاحيات</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          ) : null}
         </header>
+        <RoomRolesDialog roomId={roomId} roomName={room.data.name} permissions={{ ...permissions, canManageRoles }} open={rolesOpen} onOpenChange={setRolesOpen} />
 
         <div ref={scrollRef} onScroll={onScroll} className="relative min-h-0 flex-1 overflow-y-auto px-2.5 py-3 scrollbar-slim sm:px-4 sm:py-4">
           <div className="mx-auto w-full max-w-4xl space-y-2.5">
@@ -292,7 +314,7 @@ export function ChatRoomPage({ slug }: { slug: string }) {
                 <div key={message.id} className="space-y-2">
                   {showDay ? <div className="flex items-center gap-2 py-1"><span className="h-px flex-1 bg-border" /><span className="rounded-full bg-secondary px-2.5 py-1 text-[9px] font-semibold text-muted-foreground">{dayLabel(message.created_at, locale, t.chat)}</span><span className="h-px flex-1 bg-border" /></div> : null}
                   <div className={`group flex items-end gap-2 ${mine ? "flex-row-reverse" : ""}`}>
-                    <UserAvatar name={name} src={message.author?.avatar_url} size="sm" status={presence.onlineIds.has(message.user_id) ? "online" : undefined} role={messageRole ?? null} />
+                    <UserAvatar name={name} src={message.author?.avatar_url ?? null} size="sm" status={presence.onlineIds.has(message.user_id) ? "online" : undefined} role={messageRole ?? null} />
                     <div className={`min-w-0 max-w-[86%] sm:max-w-[72%] ${mine ? "items-end" : "items-start"}`}>
                       <div className={`rounded-2xl px-3.5 py-2 ${mine ? "rounded-te-md" : "rounded-ts-md"} ${bubble}`}>
                         <div className="mb-0.5 flex flex-wrap items-center gap-1.5">
@@ -340,9 +362,9 @@ export function ChatRoomPage({ slug }: { slug: string }) {
       </section>
 
       <div className="hidden min-h-0 w-[250px] shrink-0 lg:flex">
-        <MembersPanel members={members.data ?? []} presence={presence.entries} roomId={roomId} />
+        <MembersPanel members={members.data ?? []} presence={presence.entries} roomId={roomId ?? undefined} />
       </div>
-      <div className="lg:hidden"><MembersPanel members={members.data ?? []} presence={presence.entries} roomId={roomId} /></div>
+      <div className="lg:hidden"><MembersPanel members={members.data ?? []} presence={presence.entries} roomId={roomId ?? undefined} /></div>
     </div>
   );
 }

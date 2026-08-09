@@ -27,7 +27,7 @@ function roomKey(roomId: string): string {
 
 function authorFor(roomId: string, salt = 0): Profile {
   const hash = [...roomId].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 2166136261 ^ salt);
-  return DEMO_PROFILES[hash % DEMO_PROFILES.length];
+  return DEMO_PROFILES[hash % DEMO_PROFILES.length]!;
 }
 
 export function getActiveDemoMembers(limit = 48): Profile[] {
@@ -42,7 +42,7 @@ export function buildDemoReply(roomId: string, realMessage: string): MessageWith
   const author = authorFor(roomId, now);
   const isGreeting = /(^|\s)(سلام|هلا|هلو|مرحبا|هاي|hello|hi)(\s|!|！|$)/iu.test(realMessage);
   const pool = isGreeting ? greetings : followUps;
-  return { id: `demo-live-${roomId}-${now}`, room_id: roomId, user_id: author.id, content: pool[Math.floor(Math.random() * pool.length)], created_at: new Date(now + 1200).toISOString(), reply_to_id: null, edited_at: null, is_deleted: false, author };
+  return { id: `demo-live-${roomId}-${now}`, room_id: roomId, user_id: author.id, content: pool[Math.floor(Math.random() * pool.length)]!, created_at: new Date(now + 1200).toISOString(), reply_to_id: null, edited_at: null, is_deleted: false, author };
 }
 
 /** Lightweight room-specific ambient activity. */
@@ -50,7 +50,7 @@ export function buildDemoAmbientMessage(roomId: string): MessageWithAuthor | nul
   const now = Date.now();
   if (now - (recentlyAmbient.get(roomId) ?? 0) < 18_000) return null;
   recentlyAmbient.set(roomId, now);
-  const pool = roomPools[roomKey(roomId)];
+  const pool = roomPools[roomKey(roomId)] ?? roomPools["general"]!;
   const author = authorFor(roomId, Math.floor(now / 18_000));
-  return { id: `demo-ambient-${roomId}-${now}`, room_id: roomId, user_id: author.id, content: pool[Math.floor(Math.random() * pool.length)], created_at: new Date(now).toISOString(), reply_to_id: null, edited_at: null, is_deleted: false, author };
+  return { id: `demo-ambient-${roomId}-${now}`, room_id: roomId, user_id: author.id, content: pool[Math.floor(Math.random() * pool.length)]!, created_at: new Date(now).toISOString(), reply_to_id: null, edited_at: null, is_deleted: false, author };
 }

@@ -34,7 +34,7 @@ export function VoiceRoomDock({ roomName }: { roomName?: string }) {
     if (!roomId) return;
     let active = true;
     async function loadParticipants() {
-      const { data } = await supabase.from("room_voice_participants").select("user_id,is_speaker,is_muted").eq("room_id", roomId).eq("is_speaker", true);
+      const { data } = await supabase.from("room_voice_participants").select("user_id,is_speaker,is_muted").eq("room_id", roomId!).eq("is_speaker", true);
       const ids = (data ?? []).map((row) => row.user_id);
       if (!ids.length) { if (active) setParticipants([]); return; }
       const { data: profiles } = await supabase.from("profiles").select("id,display_name,username").in("id", ids);

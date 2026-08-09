@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { looseDb } from "@/integrations/supabase/loose-db";
 import { DEMO_MESSAGES } from "@/lib/demo-community";
 import type { MessageWithAuthor, Profile } from "@/types";
 
@@ -35,13 +36,13 @@ export async function fetchMessagePage(
   const hydratedReal: MessageWithAuthor[] = realRows.map((m) => ({
     ...m,
     author: byId.get(m.user_id) ?? null,
-    is_deleted: Boolean(m.deleted_at),
+    is_deleted: Boolean(m.is_deleted),
   }));
 
   if (!before) {
     // Prefer the seeded database demo feed so every room gets its persisted
     // activity. Fall back to the deterministic local generator if unavailable.
-    const { data: demoRows } = await supabase
+    const { data: demoRows } = await looseDb
       .from("demo_messages")
       .select("*")
       .eq("room_id", roomId)
@@ -50,13 +51,13 @@ export async function fetchMessagePage(
 
     let demo: MessageWithAuthor[] = [];
     if (demoRows?.length) {
-      const demoUserIds = [...new Set(demoRows.map((m) => m.demo_user_id))];
-      const { data: demoProfiles } = await supabase
+      const demoUserIds = [...new Set(demoRows.map((m: any) => m.demo_user_id))];
+      const { data: demoProfiles } = await looseDb
         .from("demo_members")
         .select("*")
         .in("id", demoUserIds);
-      const demoById = new Map((demoProfiles ?? []).map((p) => [p.id, p]));
-      demo = demoRows.map((m) => ({
+      const demoById = new Map<string, Profile>((demoProfiles ?? []).map((p: Profile) => [p.id, p]));
+      demo = demoRows.map((m: any) => ({
         id: m.id,
         room_id: m.room_id,
         user_id: m.demo_user_id,
@@ -104,11 +105,11 @@ export async function editMessage(id: string, content: string) {
   if (error) throw error;
 }
 
-/** Soft delete maps to the database's deleted_at column. */
+/** Soft delete maps to the database's is_deleted column. */
 export async function deleteMessage(id: string) {
   const { error } = await supabase
     .from("messages")
-    .update({ deleted_at: new Date().toISOString() })
+    .update({ is_deleted: true })
     .eq("id", id);
   if (error) throw error;
 }
