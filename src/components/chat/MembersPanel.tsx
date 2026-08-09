@@ -1,19 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Crown, Mic2, MoreVertical, Shield, Users, LogIn, LogOut, X, Settings2 } from "lucide-react";
+import { Crown, Mic2, MoreVertical, Shield, Users, LogIn, LogOut, X } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { UserAvatar } from "@/components/shared/UserAvatar";
-import { RoomRolesDialog } from "@/components/chat/RoomRolesDialog";
 import { useAuth } from "@/contexts/auth-context";
 import { useI18n } from "@/contexts/i18n-context";
 import { supabase } from "@/integrations/supabase/client";
 import { looseDb } from "@/integrations/supabase/loose-db";
 import { myRolesQuery } from "@/services/roles.service";
 import { getActiveDemoMembers } from "@/lib/demo-activity";
-import type { RoomPermissions } from "@/services/room-roles.service";
 import type { PresenceActivity, PresenceEntry } from "@/hooks/use-presence";
 import type { Profile } from "@/types";
 
@@ -25,7 +23,6 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
   const { t } = useI18n();
   const { user } = useAuth();
   const qc = useQueryClient();
-  const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const presenceById = new Map(presence.map((entry) => [entry.userId, entry]));
   const demoMembers = useMemo(() => getActiveDemoMembers(16), []);
   const realMemberIds = useMemo(() => members.map((member) => member.id).filter((id) => !id.startsWith("demo-")), [members]);
@@ -40,17 +37,6 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
   }, staleTime: 10000 });
   const globalRoles = useQuery(myRolesQuery(user?.id));
   const canManageRoles = Boolean(user && (globalRoles.data?.isAdmin || roomMeta.data?.ownerId === user.id));
-  const roomPermissions: RoomPermissions = useMemo(() => ({
-    role: roomMeta.data?.ownerId === user?.id ? "owner" : (roomMeta.data?.roomRoles?.find((row) => row.user_id === user?.id)?.role as RoomPermissions["role"] ?? null),
-    isOwner: roomMeta.data?.ownerId === user?.id,
-    isGlobalAdmin: Boolean(globalRoles.data?.isAdmin),
-    isRoomModerator: roomMeta.data?.roomRoles?.some((row) => row.user_id === user?.id && (row.role === "moderator" || row.role === "owner")) ?? false,
-    canManageRoles,
-    canModerate: canManageRoles,
-    canMute: canManageRoles,
-    canBan: canManageRoles,
-    canDeleteMessages: canManageRoles,
-  }), [roomMeta.data, user?.id, globalRoles.data?.isAdmin, canManageRoles]);
   const rolesQuery = useQuery({ queryKey: ["member-roles", realMemberIds.join(",")], enabled: realMemberIds.length > 0, queryFn: async () => {
     const [{ data: roles }, { data: vip }] = await Promise.all([
       supabase.from("user_roles").select("user_id,role").in("user_id", realMemberIds),
@@ -124,12 +110,10 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
     <header className="flex shrink-0 items-center gap-2 border-b px-3 py-3 sm:px-4 sm:py-4">
       <Users className="size-4 shrink-0 text-primary sm:size-5" />
       <h2 className="min-w-0 truncate font-display text-xs font-bold sm:text-sm">{t.chat.members}</h2>
-      {canManageRoles && roomId ? <Button type="button" variant="ghost" size="sm" className="ms-auto h-8 shrink-0 gap-1.5 rounded-lg px-2 text-[10px] font-bold sm:text-xs" onClick={() => setRoleDialogOpen(true)} aria-label="تعديل الرتب والصلاحيات"><Settings2 className="size-3.5" /><span>الرتب</span></Button> : null}
-      <Badge variant="secondary" className="shrink-0 px-1.5 text-[10px] sm:px-2 sm:text-xs">{onlineCount} متصل</Badge>
+      <Badge variant="secondary" className="ms-auto shrink-0 px-1.5 text-[10px] sm:px-2 sm:text-xs">{onlineCount} متصل</Badge>
     </header>
     <div className="min-h-0 flex-1 overflow-y-auto scrollbar-slim pb-3">{section("🌹 👑 الإدارة والمشرفون", staff)}{section("🎙️ على المايك", speakers)}{section("💎 VIP", vip)}{section("المتواجدون الآن", online)}{rows.length === 0 ? <p className="p-4 text-center text-xs text-muted-foreground">لا يوجد أعضاء في الغرفة حالياً.</p> : null}</div>
     <section className="shrink-0 border-t bg-secondary/25 p-2.5"><div className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold text-muted-foreground">نشاط الغرفة</div><div className="space-y-1">{activity.length === 0 ? <p className="text-[11px] leading-4 text-muted-foreground">الأعضاء يدخلون ويخرجون بشكل طبيعي…</p> : activity.slice(0, 4).map((event) => <div key={event.id} className="flex min-w-0 items-center gap-2 text-[11px]"><span className="grid size-5 shrink-0 place-items-center rounded-full bg-background">{event.type === "join" ? <LogIn className="size-3 text-emerald-400" /> : <LogOut className="size-3 text-muted-foreground" />}</span><span className="truncate">{event.displayName} {event.type === "join" ? "دخل الغرفة" : "غادر الغرفة"}</span></div>)}</div></section>
-    <RoomRolesDialog roomId={roomId} roomName="الغرفة" permissions={roomPermissions} open={roleDialogOpen} onOpenChange={setRoleDialogOpen} />
   </>;
 }
 
