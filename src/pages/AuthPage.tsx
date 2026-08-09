@@ -6,66 +6,50 @@ import { z } from "zod";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { BrandLogo } from "@/components/shared/BrandLogo";
 import { MarketingLayout } from "@/layouts/MarketingLayout";
 import { useI18n } from "@/contexts/i18n-context";
 import { supabase } from "@/integrations/supabase/client";
 
-const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(6),
-});
-
+const loginSchema = z.object({ email: z.string().email(), password: z.string().min(6) });
 const registerSchema = loginSchema.extend({
-  username: z
-    .string()
-    .min(3)
-    .max(24)
-    .regex(/^[a-zA-Z0-9_]+$/),
+  username: z.string().min(3).max(24).regex(/^[a-zA-Z0-9_]+$/),
   displayName: z.string().min(2).max(48),
 });
-
 type Mode = "login" | "register";
 
 export function AuthPage({ mode }: { mode: Mode }) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const [pending, setPending] = useState(false);
-
   const form = useForm<z.infer<typeof registerSchema>>({
     resolver: zodResolver(mode === "login" ? (loginSchema as never) : registerSchema),
     defaultValues: { email: "", password: "", username: "", displayName: "" },
   });
 
+  async function goToRoomsAfterAuth() {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    if (!data.session) throw new Error("تم تسجيل الدخول لكن لم يتم حفظ الجلسة. حاول مرة أخرى.");
+    await navigate({ to: "/rooms", replace: true });
+  }
+
   async function onSubmit(values: z.infer<typeof registerSchema>) {
     setPending(true);
     try {
       if (mode === "login") {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: values.email,
-          password: values.password,
-        });
+        const { error } = await supabase.auth.signInWithPassword({ email: values.email, password: values.password });
         if (error) throw error;
-        navigate({ to: "/rooms" });
+        await goToRoomsAfterAuth();
       } else {
         const { data, error } = await supabase.auth.signUp({
           email: values.email,
           password: values.password,
-          options: {
-            emailRedirectTo: window.location.origin,
-            data: { username: values.username, display_name: values.displayName },
-          },
+          options: { emailRedirectTo: window.location.origin, data: { username: values.username, display_name: values.displayName } },
         });
         if (error) throw error;
-        if (data.session) navigate({ to: "/rooms" });
+        if (data.session) await goToRoomsAfterAuth();
         else toast.success(t.auth.checkEmail);
       }
     } catch (error) {
@@ -78,101 +62,22 @@ export function AuthPage({ mode }: { mode: Mode }) {
   return (
     <MarketingLayout>
       <div className="mx-auto flex max-w-md flex-col justify-center px-4 py-14">
-        <div className="mb-6 flex justify-center">
-          <BrandLogo label={t.brand} />
-        </div>
+        <div className="mb-6 flex justify-center"><BrandLogo label={t.brand} /></div>
         <div className="glass-strong rounded-3xl p-6 shadow-elegant sm:p-8">
-          <h1 className="font-display text-2xl font-extrabold">
-            {mode === "login" ? t.auth.loginTitle : t.auth.registerTitle}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {mode === "login" ? t.auth.loginSubtitle : t.auth.registerSubtitle}
-          </p>
-
+          <h1 className="font-display text-2xl font-extrabold">{mode === "login" ? t.auth.loginTitle : t.auth.registerTitle}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{mode === "login" ? t.auth.loginSubtitle : t.auth.registerSubtitle}</p>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="mt-6 space-y-4">
-              {mode === "register" ? (
-                <>
-                  <FormField
-                    control={form.control}
-                    name="displayName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t.auth.displayName}</FormLabel>
-                        <FormControl>
-                          <Input autoComplete="name" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="username"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t.auth.username}</FormLabel>
-                        <FormControl>
-                          <Input dir="ltr" autoComplete="username" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </>
-              ) : null}
-
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t.auth.email}</FormLabel>
-                    <FormControl>
-                      <Input dir="ltr" type="email" autoComplete="email" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t.auth.password}</FormLabel>
-                    <FormControl>
-                      <Input
-                        dir="ltr"
-                        type="password"
-                        autoComplete={mode === "login" ? "current-password" : "new-password"}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <Button type="submit" className="w-full" disabled={pending}>
-                {pending
-                  ? t.common.loading
-                  : mode === "login"
-                    ? t.auth.submitLogin
-                    : t.auth.submitRegister}
-              </Button>
+              {mode === "register" ? <>
+                <FormField control={form.control} name="displayName" render={({ field }) => <FormItem><FormLabel>{t.auth.displayName}</FormLabel><FormControl><Input autoComplete="name" {...field} /></FormControl><FormMessage /></FormItem>} />
+                <FormField control={form.control} name="username" render={({ field }) => <FormItem><FormLabel>{t.auth.username}</FormLabel><FormControl><Input dir="ltr" autoComplete="username" {...field} /></FormControl><FormMessage /></FormItem>} />
+              </> : null}
+              <FormField control={form.control} name="email" render={({ field }) => <FormItem><FormLabel>{t.auth.email}</FormLabel><FormControl><Input dir="ltr" type="email" autoComplete="email" {...field} /></FormControl><FormMessage /></FormItem>} />
+              <FormField control={form.control} name="password" render={({ field }) => <FormItem><FormLabel>{t.auth.password}</FormLabel><FormControl><Input dir="ltr" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} {...field} /></FormControl><FormMessage /></FormItem>} />
+              <Button type="submit" className="w-full" disabled={pending}>{pending ? t.common.loading : mode === "login" ? t.auth.submitLogin : t.auth.submitRegister}</Button>
             </form>
           </Form>
-
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            {mode === "login" ? t.auth.noAccount : t.auth.hasAccount}{" "}
-            <Link
-              to={mode === "login" ? "/register" : "/login"}
-              className="font-medium text-primary hover:underline"
-            >
-              {mode === "login" ? t.nav.register : t.nav.login}
-            </Link>
-          </p>
+          <p className="mt-6 text-center text-sm text-muted-foreground">{mode === "login" ? t.auth.noAccount : t.auth.hasAccount}{" "}<Link to={mode === "login" ? "/register" : "/login"} className="font-medium text-primary hover:underline">{mode === "login" ? t.nav.register : t.nav.login}</Link></p>
         </div>
       </div>
     </MarketingLayout>
