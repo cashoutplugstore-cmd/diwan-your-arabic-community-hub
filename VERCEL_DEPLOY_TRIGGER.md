@@ -1,12 +1,11 @@
 # Production deployment trigger
 
-This file intentionally triggers a fresh Vercel Production deployment from `main` after the Arabic-only room directory redesign.
+This file intentionally triggers a fresh Vercel Production deployment from `main` after the latest Diwan chat/community polish.
 
-- Public room directory is Arabic countries only
-- Foreign countries are excluded from the public room browser
-- Arabic rooms are grouped visually by country and city
-- Search results are limited to Arabic public rooms
-- Room cards use a cleaner graphical layout
-- Chat history and role permissions remain unchanged
+- Arabic room directory remains unchanged
+- AI community replies are deduplicated and limited to a small natural burst
+- Member controls are combined into the chat header on mobile
+- Duplicate mobile member button is removed
+- Chat bubbles no longer show the repeated AI label
 
-Deployment sync marker: 2026-08-10T00:20:00Z
+Deployment sync marker: 2026-08-09T17:22:30Z
