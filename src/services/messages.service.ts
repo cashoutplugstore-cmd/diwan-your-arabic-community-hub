@@ -1,16 +1,12 @@
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { looseDb } from "@/integrations/supabase/loose-db";
-import { DEMO_MESSAGES } from "@/lib/demo-community";
+import { DEMO_MESSAGES, DEMO_PROFILES } from "@/lib/demo-community";
 import type { MessageWithAuthor, Profile } from "@/types";
 
 export const MESSAGE_PAGE_SIZE = 40;
 export const MAX_MESSAGE_LENGTH = 2000;
 
-/**
- * Loads real messages plus the seeded public demo feed used by Diwan's community rooms.
- * Demo activity is read-only and is never written to the real messages table.
- */
 export async function fetchMessagePage(
   roomId: string,
   before?: string | null,
@@ -23,11 +19,8 @@ export async function fetchMessagePage(
     .limit(MESSAGE_PAGE_SIZE);
   if (before) query = query.lt("created_at", before);
 
-  // A room can be publicly visible while the authenticated messages policy
-  // still filters real messages. Never let that policy failure hide the demo feed.
   const { data, error } = await query;
   const realRows = error ? [] : (data ?? []).slice().reverse();
-
   const authorIds = [...new Set(realRows.map((m) => m.user_id))];
   const { data: profiles } = authorIds.length
     ? await supabase.from("profiles").select("*").in("id", authorIds)
@@ -40,8 +33,6 @@ export async function fetchMessagePage(
   }));
 
   if (!before) {
-    // Prefer the seeded database demo feed so every room gets its persisted
-    // activity. Fall back to the deterministic local generator if unavailable.
     const { data: demoRows } = await looseDb
       .from("demo_messages")
       .select("*")
@@ -71,13 +62,37 @@ export async function fetchMessagePage(
     }
 
     if (!demo.length) demo = DEMO_MESSAGES(roomId);
-
     return [...demo, ...hydratedReal].sort(
       (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     );
   }
 
   return hydratedReal;
+}
+
+function aiAuthorFor(roomId: string) {
+  const hash = [...roomId].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 2166136261);
+  return DEMO_PROFILES[hash % DEMO_PROFILES.length]!;
+}
+
+async function queueAIRoomReply(roomId: string, message: string) {
+  try {
+    const { data, error } = await supabase.functions.invoke("diwan-ai-room", {
+      body: { roomId, roomName: roomId, message, language: "ar" },
+    });
+    if (error || !data?.text) return;
+
+    const author = aiAuthorFor(roomId);
+    const createdAt = new Date(Date.now() + 1600).toISOString();
+    await looseDb.from("demo_messages").insert({
+      room_id: roomId,
+      demo_user_id: author.id,
+      content: data.text,
+      created_at: createdAt,
+    });
+  } catch {
+    // AI is an enhancement; never make a real member's message fail because AI is unavailable.
+  }
 }
 
 export async function sendMessage(input: {
@@ -96,10 +111,13 @@ export async function sendMessage(input: {
   });
   if (error) throw error;
 
-  // Local sequencing signal only: never stored as a chat message.
   if (typeof window !== "undefined") {
     window.localStorage.setItem(`diwan:last-real-message:${input.roomId}`, String(Date.now()));
   }
+
+  // AI reply runs after the real message succeeds. It is never allowed to block
+  // or fail the real chat message.
+  void queueAIRoomReply(input.roomId, content);
 }
 
 export async function editMessage(id: string, content: string) {
@@ -110,7 +128,6 @@ export async function editMessage(id: string, content: string) {
   if (error) throw error;
 }
 
-/** Soft delete maps to the database's is_deleted column. */
 export async function deleteMessage(id: string) {
   const { error } = await supabase
     .from("messages")
