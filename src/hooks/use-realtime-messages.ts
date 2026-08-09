@@ -13,6 +13,10 @@ type Handlers = {
 /**
  * Realtime room messages plus a lightweight synthetic UI activity layer.
  * Synthetic activity is never inserted into Supabase.
+ *
+ * Own INSERT events are ignored because the chat page already adds an
+ * optimistic copy and invalidates the query after the send succeeds. This
+ * prevents the Realtime echo from rendering the same message twice.
  */
 export function useRealtimeMessages(roomId: string | undefined, handlers: Handlers = {}) {
   const queryClient = useQueryClient();
@@ -23,16 +27,19 @@ export function useRealtimeMessages(roomId: string | undefined, handlers: Handle
     if (!roomId) return;
     let disposed = false;
     let ambientTimer: number | undefined;
+    let currentUserId: string | null = null;
+
+    void supabase.auth.getUser().then(({ data }) => {
+      if (!disposed) currentUserId = data.user?.id ?? null;
+    });
 
     const emitAmbient = () => {
       if (disposed || document.visibilityState !== "visible") return;
       const message = buildDemoAmbientMessage(roomId);
       if (message) handlersRef.current.onInsert?.(message as Message);
-      // Natural gaps: activity is intermittent, not a message every second.
       ambientTimer = window.setTimeout(emitAmbient, 12_000 + Math.floor(Math.random() * 24_000));
     };
 
-    // Give a fresh room a moment before its first synthetic activity.
     ambientTimer = window.setTimeout(emitAmbient, 8_000 + Math.floor(Math.random() * 12_000));
 
     const channel = supabase
@@ -42,11 +49,13 @@ export function useRealtimeMessages(roomId: string | undefined, handlers: Handle
         { event: "INSERT", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` },
         (payload) => {
           const message = payload.new as Message;
+
+          // Do not append our own Realtime echo. The optimistic row is replaced
+          // by the normal React Query invalidation in the send mutation.
+          if (currentUserId && message.user_id === currentUserId) return;
+
           handlersRef.current.onInsert?.(message);
 
-          // Every real member message can naturally trigger the community AI.
-          // triggerAIRoomReplies deduplicates by message id, so the local send
-          // path and this realtime path cannot schedule the same reaction twice.
           if (!String(message.user_id).startsWith("demo-")) {
             triggerAIRoomReplies({
               roomId,
