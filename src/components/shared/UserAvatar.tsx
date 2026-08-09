@@ -6,9 +6,13 @@ import { useAuth } from "@/contexts/auth-context";
 import { myRolesQuery } from "@/services/roles.service";
 import { profileQuery } from "@/services/profiles.service";
 import { looseDb } from "@/integrations/supabase/loose-db";
+import { supabase } from "@/integrations/supabase/client";
 
 type Role = "admin" | "moderator" | "vip" | "speaker";
 type Props = { name?: string | null | undefined; src?: string | null | undefined; size?: "sm" | "md" | "lg" | undefined; status?: string | null | undefined; role?: Role | null | undefined; className?: string | undefined; showMemberBadge?: boolean | undefined; autoCurrentRole?: boolean | undefined };
+type PublicRole = { user_id: string; role: string };
+type PublicProfile = { id: string; username: string; display_name: string; avatar_url: string | null };
+
 const sizes = { sm: "size-8", md: "size-10", lg: "size-16" };
 const labels = { admin: "ADMIN", moderator: "MOD", vip: "VIP", speaker: "MIC" } as const;
 
@@ -17,9 +21,28 @@ export function UserAvatar({ name, src, size = "md", status, role, className, sh
   const profile = useQuery({ ...profileQuery(user?.id), enabled: autoCurrentRole && Boolean(user?.id) });
   const currentRoles = useQuery({ ...myRolesQuery(user?.id), enabled: autoCurrentRole && Boolean(user?.id) });
   const premium = useQuery({ queryKey: ["avatar-premium", user?.id], enabled: autoCurrentRole && Boolean(user?.id), staleTime: 60000, queryFn: async () => { if (!user?.id) return false; const { data } = await looseDb.from("premium_subscriptions").select("status,expires_at").eq("user_id", user.id).eq("status", "active").limit(1); const row = (data as any[] | null)?.[0]; return Boolean(row && (!row.expires_at || new Date(row.expires_at).getTime() > Date.now())); } });
+  const publicStaff = useQuery({ queryKey: ["public-avatar-staff"], enabled: Boolean(name && !role), staleTime: 30000, queryFn: async () => {
+    const [{ data: profiles, error: profilesError }, { data: roles, error: rolesError }] = await Promise.all([
+      supabase.from("profiles").select("id,username,display_name,avatar_url"),
+      supabase.from("user_roles").select("user_id,role"),
+    ]);
+    if (profilesError) throw profilesError;
+    if (rolesError) throw rolesError;
+    return { profiles: (profiles ?? []) as PublicProfile[], roles: (roles ?? []) as PublicRole[] };
+  });
+  const publicRole = (() => {
+    if (!name || role || !publicStaff.data) return null;
+    const candidates = publicStaff.data.profiles.filter((p) => p.username === name || p.display_name === name);
+    const matched = candidates.length === 1 ? candidates[0] : candidates.find((p) => Boolean(src && p.avatar_url === src));
+    if (!matched) return null;
+    const roles = publicStaff.data.roles.filter((r) => r.user_id === matched.id).map((r) => r.role);
+    if (roles.includes("admin")) return "admin" as const;
+    if (roles.includes("moderator")) return "moderator" as const;
+    return null;
+  })();
   const currentName = profile.data?.display_name || profile.data?.username || user?.email?.split("@")[0] || "";
   const isCurrentUser = Boolean(autoCurrentRole && user?.id && name && currentName && name === currentName);
-  const effectiveRole: Role | null = role ?? (isCurrentUser && currentRoles.data?.isAdmin ? "admin" : isCurrentUser && currentRoles.data?.isModerator ? "moderator" : isCurrentUser && premium.data ? "vip" : null);
+  const effectiveRole: Role | null = role ?? publicRole ?? (isCurrentUser && currentRoles.data?.isAdmin ? "admin" : isCurrentUser && currentRoles.data?.isModerator ? "moderator" : isCurrentUser && premium.data ? "vip" : null);
   const Icon = effectiveRole === "admin" ? ShieldCheck : effectiveRole === "moderator" ? Shield : effectiveRole === "vip" ? Crown : Mic2;
   const isMember = (showMemberBadge || status === "online" || isCurrentUser) && !effectiveRole;
   return <div className={cn("relative shrink-0 pt-2", className)}>
