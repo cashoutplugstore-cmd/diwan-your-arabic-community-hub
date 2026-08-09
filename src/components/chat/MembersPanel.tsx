@@ -9,11 +9,12 @@ import { UserAvatar } from "@/components/shared/UserAvatar";
 import { useAuth } from "@/contexts/auth-context";
 import { useI18n } from "@/contexts/i18n-context";
 import { supabase } from "@/integrations/supabase/client";
+import { looseDb } from "@/integrations/supabase/loose-db";
 import { myRolesQuery } from "@/services/roles.service";
 import type { PresenceActivity, PresenceEntry } from "@/hooks/use-presence";
 import type { Profile } from "@/types";
 
-type Props = { members: Profile[]; presence: PresenceEntry[]; activity?: PresenceActivity[]; roomId?: string };
+type Props = { members: Profile[]; presence: PresenceEntry[]; activity?: PresenceActivity[] | undefined; roomId?: string | undefined };
 type Role = "admin" | "moderator" | "vip" | "speaker" | "owner" | "member" | null;
 type Row = { id: string; name: string; avatar: string | null; status: "online" | "away" | "offline"; role: Role; speaking: boolean };
 
@@ -37,9 +38,9 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
   const rolesQuery = useQuery({ queryKey: ["member-roles", memberIds.join(",")], enabled: memberIds.length > 0, queryFn: async () => {
     const [{ data: roles }, { data: vip }] = await Promise.all([
       supabase.from("user_roles").select("user_id,role").in("user_id", memberIds),
-      supabase.from("premium_subscriptions").select("user_id,status,expires_at").in("user_id", memberIds).eq("status", "active"),
+      looseDb.from("premium_subscriptions").select("user_id,status,expires_at").in("user_id", memberIds).eq("status", "active"),
     ]);
-    return { roles: roles ?? [], vip: (vip ?? []).filter((row) => !row.expires_at || new Date(row.expires_at).getTime() > Date.now()) };
+    return { roles: roles ?? [], vip: ((vip ?? []) as any[]).filter((row) => !row.expires_at || new Date(row.expires_at).getTime() > Date.now()) };
   }, staleTime: 30000 });
   const voiceQuery = useQuery({ queryKey: ["room-speakers", roomId], enabled: Boolean(roomId), queryFn: async () => {
     const { data, error } = await supabase.from("room_voice_participants").select("user_id,is_speaker,is_muted").eq("room_id", roomId!).eq("is_speaker", true);
@@ -57,7 +58,7 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
       if (row.role === "admin") map.set(row.user_id, "admin");
       else if (row.role === "moderator" && !map.has(row.user_id)) map.set(row.user_id, "moderator");
     }
-    for (const row of rolesQuery.data?.vip ?? []) if (!map.has(row.user_id)) map.set(row.user_id, "vip");
+    for (const row of (rolesQuery.data?.vip ?? []) as any[]) if (!map.has(row.user_id)) map.set(row.user_id, "vip");
     return map;
   }, [roomMeta.data, rolesQuery.data]);
   const speakerById = useMemo(() => new Map((voiceQuery.data ?? []).map((row) => [row.user_id, row])), [voiceQuery.data]);
@@ -85,7 +86,7 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
     return <DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon" className="size-7 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100" aria-label={`تعديل رتبة ${row.name}`}><MoreVertical className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="min-w-44"><DropdownMenuItem onClick={() => changeRole.mutate({ userId: row.id, role: isModerator ? "member" : "moderator" })} disabled={changeRole.isPending}><Shield className="size-4" />{isModerator ? "إزالة رتبة المشرف" : "تعيين كمشرف"}</DropdownMenuItem>{isModerator ? <DropdownMenuSeparator /> : null}{isModerator ? <DropdownMenuItem onClick={() => changeRole.mutate({ userId: row.id, role: "member" })} disabled={changeRole.isPending}>إرجاع إلى عضو</DropdownMenuItem> : null}</DropdownMenuContent></DropdownMenu>;
   };
   const renderRow = (row: Row) => <li key={row.id} className={`group relative flex min-w-0 items-center gap-2 rounded-xl px-2 py-2 transition-all hover:bg-secondary/60 ${row.role === "admin" ? "border border-rose-400/30 bg-rose-500/[0.08]" : row.role === "owner" ? "border border-amber-400/20 bg-amber-500/[0.05]" : row.role === "moderator" ? "border border-sky-400/15 bg-sky-500/[0.04]" : ""}`}>
-    <UserAvatar name={row.name} src={row.avatar} size="sm" status={row.status} role={row.role === "owner" ? "admin" : row.role} />
+    <UserAvatar name={row.name} src={row.avatar} size="sm" status={row.status} role={row.role === "owner" ? "admin" : row.role === "admin" || row.role === "moderator" || row.role === "vip" ? row.role : null} />
     <span className={`min-w-0 flex-1 truncate text-xs sm:text-sm ${row.role === "admin" ? "font-black text-rose-300" : row.role === "owner" ? "font-black text-amber-300" : row.role === "vip" ? "font-bold text-fuchsia-300" : row.role === "moderator" ? "font-bold text-sky-300" : "font-semibold"}`}>{row.role === "admin" ? "🌹 👑 " : row.role === "owner" ? "👑 " : ""}{row.name}</span>
     {row.role === "admin" ? <Badge className="shrink-0 border-rose-400/40 bg-rose-500/15 px-1.5 py-0 text-[8px] font-black text-rose-300">ADMIN</Badge> : null}
     {row.role === "owner" ? <Badge className="shrink-0 border-amber-400/30 bg-amber-500/10 px-1.5 py-0 text-[8px] font-black text-amber-300">مالك</Badge> : null}
