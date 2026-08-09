@@ -9,7 +9,7 @@ const labels = { admin: "ADMIN", moderator: "MOD", vip: "VIP", speaker: "MIC" } 
 
 export function UserAvatar({ name, src, size = "md", status, role, className, showMemberBadge = false }: Props) {
   const Icon = role === "admin" ? ShieldCheck : role === "moderator" ? Shield : role === "vip" ? Crown : Mic2;
-  const isMember = showMemberBadge && !role;
+  const isMember = (showMemberBadge || status === "online") && !role;
   return <div className={cn("relative shrink-0 pt-2", className)}>
     <Avatar className={cn(sizes[size], "ring-2 ring-border", role === "admin" && "ring-rose-400 shadow-[0_0_18px_rgba(244,63,94,.5)]", role === "moderator" && "ring-sky-400 shadow-[0_0_12px_rgba(56,189,248,.35)]", role === "vip" && "ring-fuchsia-400 shadow-[0_0_14px_rgba(232,121,249,.42)]", role === "speaker" && "ring-emerald-400 shadow-[0_0_12px_rgba(52,211,153,.4)]", isMember && "ring-slate-400/70") }>
       {src ? <AvatarImage src={src} alt={name ?? ""} /> : null}
@@ -17,10 +17,10 @@ export function UserAvatar({ name, src, size = "md", status, role, className, sh
     </Avatar>
     {status ? <span aria-label={status} className={cn("absolute bottom-1 -end-0.5 size-3 rounded-full border-2 border-background", status === "online" ? "bg-success" : "bg-muted-foreground")} /> : null}
     {role ? <span className={cn("absolute top-0 start-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border px-1.5 py-0.5 text-[8px] font-black leading-none shadow-sm", role === "admin" && "border-rose-400/60 bg-gradient-to-r from-rose-500 to-pink-500 text-white", role === "moderator" && "border-sky-400/50 bg-sky-400 text-sky-950", role === "vip" && "border-fuchsia-400/50 bg-fuchsia-400 text-fuchsia-950", role === "speaker" && "border-emerald-400/50 bg-emerald-400 text-emerald-950")}><Icon className="me-0.5 inline size-2.5" />{labels[role]}</span> : null}
-    {isMember ? <span className="absolute top-0 start-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-slate-500/50 bg-slate-700/90 px-1.5 py-0.5 text-[8px] font-bold leading-none text-slate-100 shadow-sm">عضو</span> : null}
+    {isMember ? <span className="absolute top-0 start-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-slate-500/50 bg-slate-700/90 px-1.5 py-0.5 text-[8px] font-bold leading-none text-slate-100">عضو</span> : null}
     {role === "admin" ? <span className="absolute -start-1 top-0 text-[11px]" aria-hidden="true">🌹</span> : null}
-    {role === "admin" ? <Crown className="absolute -end-1 -top-1 size-3 text-rose-300 drop-shadow" /> : null}
-    {role === "vip" ? <Sparkles className="absolute -end-1 top-0 size-3 text-fuchsia-300" /> : null}
-    {role === "speaker" ? <span className="absolute bottom-0 -start-1 grid size-4 place-items-center rounded-full bg-emerald-500 text-white"><Mic2 className="size-2.5" /></span> : null}
+    {role === "admin" ? <Crown className="absolute -end-1 -top-1 size-3 text-rose-300 drop-shadow"/> : null}
+    {role === "vip" ? <Sparkles className="absolute -end-1 top-0 size-3 text-fuchsia-300"/> : null}
+    {role === "speaker" ? <span className="absolute bottom-0 -start-1 grid size-4 place-items-center rounded-full bg-emerald-500 text-white"><Mic2 className="size-2.5"/></span> : null}
   </div>;
 }
