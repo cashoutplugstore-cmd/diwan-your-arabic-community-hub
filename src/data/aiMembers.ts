@@ -17,35 +17,14 @@ export const aiMembers: AIMember[] = [
   { id: 'ai-ali', name: 'علي', gender: 'male', avatar: '🔥', personality: 'اجتماعي', topics: ['كرة القدم', 'الألعاب', 'السيارات', 'الأفلام', 'الضحك'] },
 ];
 
-const femaleOpeners = [
-  'ها شكو ماكو؟ 😂',
-  'منو صاحي لهسه؟ 😅',
-  'بنات شنو آخر مسلسل شفتوه؟ 👀',
-  'أريد قهوة وبعدين نحچي ☕😂',
-  'اليوم الجو يحتاج طلعة والله 😭',
-];
-
-const replies = [
-  'هههههههه لا عاد 😂',
-  'والله صدگ 😭',
-  'اتفق وياج 100%',
-  'لاااا شنو هالحچي 😂',
-  'ذكرتيني بموقف صار وياي',
-  'زين منو جربها؟ 👀',
-  'ههههه خلي نسولف بهالموضوع',
-];
+const femaleOpeners = ['ها شكو ماكو؟ 😂', 'منو صاحي لهسه؟ 😅', 'بنات شنو آخر مسلسل شفتوه؟ 👀', 'أريد قهوة وبعدين نحچي ☕😂', 'اليوم الجو يحتاج طلعة والله 😭'];
+const replies = ['هههههههه لا عاد 😂', 'والله صدگ 😭', 'اتفق وياج 100%', 'لاااا شنو هالحچي 😂', 'ذكرتيني بموقف صار وياي', 'زين منو جربها؟ 👀', 'ههههه خلي نسولف بهالموضوع'];
 
 export function buildAiConversation(member: AIMember, recentMessages: string[] = []) {
   const topic = member.topics[Math.floor(Math.random() * member.topics.length)];
-  const opener = member.gender === 'female'
-    ? femaleOpeners[Math.floor(Math.random() * femaleOpeners.length)]
-    : `شباب منو يتابع ${topic}؟ 😎`;
-
+  const opener = member.gender === 'female' ? femaleOpeners[Math.floor(Math.random() * femaleOpeners.length)] : `شباب منو يتابع ${topic}؟ 😎`;
   const context = recentMessages.slice(-3).join(' ').toLowerCase();
   const contextual = context.includes('مسلسل') || context.includes('سفر') || context.includes('قهوة') || context.includes('ضحك');
-  const followUp = contextual
-    ? replies[Math.floor(Math.random() * replies.length)]
-    : `${opener} شنو رأيكم بـ${topic}؟`;
-
-  return { topic, text: followUp };
+  const text = contextual ? replies[Math.floor(Math.random() * replies.length)] : `${opener} شنو رأيكم بـ${topic}؟`;
+  return { topic, text };
 }
