@@ -12,13 +12,14 @@ import { useI18n } from "@/contexts/i18n-context";
 import { supabase } from "@/integrations/supabase/client";
 import { looseDb } from "@/integrations/supabase/loose-db";
 import { myRolesQuery } from "@/services/roles.service";
+import { getActiveDemoMembers } from "@/lib/demo-activity";
 import type { RoomPermissions } from "@/services/room-roles.service";
 import type { PresenceActivity, PresenceEntry } from "@/hooks/use-presence";
 import type { Profile } from "@/types";
 
 type Props = { members: Profile[]; presence: PresenceEntry[]; activity?: PresenceActivity[] | undefined; roomId?: string | undefined };
 type Role = "admin" | "moderator" | "vip" | "speaker" | "owner" | "member" | null;
-type Row = { id: string; name: string; avatar: string | null; status: "online" | "away" | "offline"; role: Role; speaking: boolean };
+type Row = { id: string; name: string; avatar: string | null; status: "online" | "away" | "offline"; role: Role; speaking: boolean; demo?: boolean };
 
 function PanelContent({ members, presence, activity = [], roomId }: Props) {
   const { t } = useI18n();
@@ -26,7 +27,8 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
   const qc = useQueryClient();
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const presenceById = new Map(presence.map((entry) => [entry.userId, entry]));
-  const memberIds = members.map((member) => member.id);
+  const demoMembers = useMemo(() => getActiveDemoMembers(16), []);
+  const realMemberIds = useMemo(() => members.map((member) => member.id).filter((id) => !id.startsWith("demo-")), [members]);
   const roomMeta = useQuery({ queryKey: ["room-role-meta", roomId], enabled: Boolean(roomId), queryFn: async () => {
     const [{ data: room, error: roomError }, { data: roomRoles, error: roleError }] = await Promise.all([
       supabase.from("rooms").select("owner_id").eq("id", roomId!).maybeSingle(),
@@ -49,10 +51,10 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
     canBan: canManageRoles,
     canDeleteMessages: canManageRoles,
   }), [roomMeta.data, user?.id, globalRoles.data?.isAdmin, canManageRoles]);
-  const rolesQuery = useQuery({ queryKey: ["member-roles", memberIds.join(",")], enabled: memberIds.length > 0, queryFn: async () => {
+  const rolesQuery = useQuery({ queryKey: ["member-roles", realMemberIds.join(",")], enabled: realMemberIds.length > 0, queryFn: async () => {
     const [{ data: roles }, { data: vip }] = await Promise.all([
-      supabase.from("user_roles").select("user_id,role").in("user_id", memberIds),
-      looseDb.from("premium_subscriptions").select("user_id,status,expires_at").in("user_id", memberIds).eq("status", "active"),
+      supabase.from("user_roles").select("user_id,role").in("user_id", realMemberIds),
+      looseDb.from("premium_subscriptions").select("user_id,status,expires_at").in("user_id", realMemberIds).eq("status", "active"),
     ]);
     return { roles: roles ?? [], vip: ((vip ?? []) as any[]).filter((row) => !row.expires_at || new Date(row.expires_at).getTime() > Date.now()) };
   }, staleTime: 30000 });
@@ -76,17 +78,22 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
     return map;
   }, [roomMeta.data, rolesQuery.data]);
   const speakerById = useMemo(() => new Map((voiceQuery.data ?? []).map((row) => [row.user_id, row])), [voiceQuery.data]);
-  const rows = useMemo<Row[]>(() => members.map((member) => {
-    const p = presenceById.get(member.id);
-    return { id: member.id, name: member.display_name || member.username || "—", avatar: member.avatar_url, status: p?.status ?? "offline", role: speakerById.has(member.id) ? "speaker" : (roleById.get(member.id) ?? null), speaking: speakerById.has(member.id) };
-  }), [members, presence, roleById, speakerById]);
+  const rows = useMemo<Row[]>(() => {
+    const realRows = members.map((member) => {
+      const p = presenceById.get(member.id);
+      return { id: member.id, name: member.display_name || member.username || "—", avatar: member.avatar_url, status: p?.status ?? "offline", role: speakerById.has(member.id) ? "speaker" : (roleById.get(member.id) ?? "member"), speaking: speakerById.has(member.id), demo: false };
+    });
+    const realIds = new Set(realRows.map((row) => row.id));
+    const demoRows = demoMembers.filter((member) => !realIds.has(member.id)).map((member, index) => ({ id: member.id, name: member.display_name || member.username || "عضو", avatar: member.avatar_url, status: "online" as const, role: index === 2 || index === 9 ? "vip" as const : "member" as const, speaking: false, demo: true }));
+    return [...realRows, ...demoRows];
+  }, [members, presence, roleById, speakerById, demoMembers]);
   const staff = rows.filter((row) => row.role === "admin" || row.role === "owner" || row.role === "moderator");
   const speakers = rows.filter((row) => row.speaking && !staff.some((staffRow) => staffRow.id === row.id));
   const vip = rows.filter((row) => row.role === "vip");
-  const online = rows.filter((row) => row.status !== "offline" && !speakers.some((speaker) => speaker.id === row.id) && !staff.some((staffRow) => staffRow.id === row.id) && !vip.some((vipRow) => vipRow.id === row.id));
+  const online = rows.filter((row) => row.role === "member" && row.status !== "offline");
   const changeRole = useMutation({ mutationFn: async ({ userId, role }: { userId: string; role: "member" | "moderator" }) => {
     if (!roomId || !user || !canManageRoles) throw new Error("غير مصرح");
-    if (userId === user.id || userId === roomMeta.data?.ownerId) throw new Error("لا يمكن تعديل هذا العضو");
+    if (userId.startsWith("demo-") || userId === user.id || userId === roomMeta.data?.ownerId) throw new Error("لا يمكن تعديل عضو تجريبي أو هذا العضو");
     const { error } = await supabase.from("room_members").update({ role }).eq("room_id", roomId).eq("user_id", userId);
     if (error) throw error;
   }, onSuccess: async (_, input) => {
@@ -96,13 +103,14 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
     toast.success(input.role === "moderator" ? "تم تعيين العضو مشرفاً في الغرفة" : "تم إرجاع العضو إلى رتبة عضو");
   }, onError: (error) => toast.error((error as Error).message) });
   const renderRoleActions = (row: Row) => {
-    if (!canManageRoles || !roomId || row.id === user?.id || row.id === roomMeta.data?.ownerId || row.role === "admin" || row.role === "speaker") return null;
+    if (!canManageRoles || !roomId || row.demo || row.id === user?.id || row.id === roomMeta.data?.ownerId || row.role === "admin" || row.role === "speaker") return null;
     const isModerator = row.role === "moderator";
     return <DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon" className="size-8 shrink-0 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100" aria-label={`تعديل رتبة ${row.name}`}><MoreVertical className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="min-w-44"><DropdownMenuItem onClick={() => changeRole.mutate({ userId: row.id, role: isModerator ? "member" : "moderator" })} disabled={changeRole.isPending}><Shield className="size-4" />{isModerator ? "إزالة رتبة المشرف" : "تعيين كمشرف"}</DropdownMenuItem>{isModerator ? <DropdownMenuSeparator /> : null}{isModerator ? <DropdownMenuItem onClick={() => changeRole.mutate({ userId: row.id, role: "member" })} disabled={changeRole.isPending}>إرجاع إلى عضو</DropdownMenuItem> : null}</DropdownMenuContent></DropdownMenu>;
   };
-  const renderRow = (row: Row) => <li key={row.id} className={`group relative flex min-w-0 items-center gap-2 rounded-xl px-2 py-2 transition-all hover:bg-secondary/60 ${row.role === "admin" ? "border border-rose-400/30 bg-rose-500/[0.08]" : row.role === "owner" ? "border border-amber-400/20 bg-amber-500/[0.05]" : row.role === "moderator" ? "border border-sky-400/15 bg-sky-500/[0.04]" : ""}`}>
-    <UserAvatar name={row.name} src={row.avatar} size="sm" status={row.status} role={row.role === "owner" ? "admin" : row.role === "admin" || row.role === "moderator" || row.role === "vip" ? row.role : null} />
+  const renderRow = (row: Row) => <li key={row.id} className={`group relative flex min-w-0 items-center gap-2 rounded-xl px-2 py-2 transition-all hover:bg-secondary/60 ${row.demo ? "bg-secondary/20" : ""} ${row.role === "admin" ? "border border-rose-400/30 bg-rose-500/[0.08]" : row.role === "owner" ? "border border-amber-400/20 bg-amber-500/[0.05]" : row.role === "moderator" ? "border border-sky-400/15 bg-sky-500/[0.04]" : row.role === "vip" ? "border border-fuchsia-400/15 bg-fuchsia-500/[0.04]" : ""}`}>
+    <UserAvatar name={row.name} src={row.avatar} size="sm" status={row.status} role={row.role === "owner" ? "admin" : row.role === "admin" || row.role === "moderator" || row.role === "vip" ? row.role : null} showMemberBadge={row.role === "member"} />
     <span className={`min-w-0 flex-1 truncate text-xs sm:text-sm ${row.role === "admin" ? "font-black text-rose-300" : row.role === "owner" ? "font-black text-amber-300" : row.role === "vip" ? "font-bold text-fuchsia-300" : row.role === "moderator" ? "font-bold text-sky-300" : "font-semibold"}`}>{row.role === "admin" ? "🌹 👑 " : row.role === "owner" ? "👑 " : ""}{row.name}</span>
+    {row.demo ? <span className="shrink-0 rounded-full border border-slate-500/30 bg-slate-700/30 px-1.5 py-0.5 text-[8px] font-semibold text-slate-300">نشط</span> : null}
     {row.role === "admin" ? <Badge className="order-first shrink-0 border-rose-400/40 bg-rose-500/15 px-1.5 py-0 text-[8px] font-black text-rose-300">ADMIN</Badge> : null}
     {row.role === "owner" ? <Badge className="order-first shrink-0 border-amber-400/30 bg-amber-500/10 px-1.5 py-0 text-[8px] font-black text-amber-300">مالك</Badge> : null}
     {row.role === "moderator" ? <Badge className="order-first shrink-0 border-sky-400/30 bg-sky-500/10 px-1.5 py-0 text-[8px] font-bold text-sky-300">MOD</Badge> : null}
@@ -116,11 +124,11 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
     <header className="flex shrink-0 items-center gap-2 border-b px-3 py-3 sm:px-4 sm:py-4">
       <Users className="size-4 shrink-0 text-primary sm:size-5" />
       <h2 className="min-w-0 truncate font-display text-xs font-bold sm:text-sm">{t.chat.members}</h2>
-      {canManageRoles && roomId ? <Button type="button" variant="ghost" size="sm" className="ms-auto h-8 shrink-0 gap-1.5 rounded-lg px-2 text-[10px] font-bold sm:text-xs" onClick={() => setRoleDialogOpen(true)} aria-label="تعديل الرتب والصلاحيات"><Settings2 className="size-3.5" /> <span className="hidden xs:inline sm:inline">الرتب</span></Button> : null}
+      {canManageRoles && roomId ? <Button type="button" variant="ghost" size="sm" className="ms-auto h-8 shrink-0 gap-1.5 rounded-lg px-2 text-[10px] font-bold sm:text-xs" onClick={() => setRoleDialogOpen(true)} aria-label="تعديل الرتب والصلاحيات"><Settings2 className="size-3.5" /><span>الرتب</span></Button> : null}
       <Badge variant="secondary" className="shrink-0 px-1.5 text-[10px] sm:px-2 sm:text-xs">{onlineCount} متصل</Badge>
     </header>
-    <div className="min-h-0 flex-1 overflow-y-auto scrollbar-slim pb-3">{section("🌹 👑 الإدارة والمشرفون", staff)}{section("🎙️ على المايك", speakers)}{section("💎 VIP", vip)}{section("المتواجدون", online)}{rows.length === 0 ? <p className="p-4 text-center text-xs text-muted-foreground">لا يوجد أعضاء حقيقيون في الغرفة حالياً.</p> : null}</div>
-    <section className="shrink-0 border-t bg-secondary/25 p-2.5"><div className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold text-muted-foreground">نشاط الغرفة</div><div className="space-y-1">{activity.length === 0 ? <p className="text-[11px] leading-4 text-muted-foreground">بانتظار دخول أو مغادرة…</p> : activity.slice(0, 4).map((event) => <div key={event.id} className="flex min-w-0 items-center gap-2 text-[11px]"><span className="grid size-5 shrink-0 place-items-center rounded-full bg-background">{event.type === "join" ? <LogIn className="size-3 text-emerald-400" /> : <LogOut className="size-3 text-muted-foreground" />}</span><span className="truncate">{event.displayName} {event.type === "join" ? "دخل الغرفة" : "غادر الغرفة"}</span></div>)}</div></section>
+    <div className="min-h-0 flex-1 overflow-y-auto scrollbar-slim pb-3">{section("🌹 👑 الإدارة والمشرفون", staff)}{section("🎙️ على المايك", speakers)}{section("💎 VIP", vip)}{section("المتواجدون الآن", online)}{rows.length === 0 ? <p className="p-4 text-center text-xs text-muted-foreground">لا يوجد أعضاء في الغرفة حالياً.</p> : null}</div>
+    <section className="shrink-0 border-t bg-secondary/25 p-2.5"><div className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold text-muted-foreground">نشاط الغرفة</div><div className="space-y-1">{activity.length === 0 ? <p className="text-[11px] leading-4 text-muted-foreground">الأعضاء يدخلون ويخرجون بشكل طبيعي…</p> : activity.slice(0, 4).map((event) => <div key={event.id} className="flex min-w-0 items-center gap-2 text-[11px]"><span className="grid size-5 shrink-0 place-items-center rounded-full bg-background">{event.type === "join" ? <LogIn className="size-3 text-emerald-400" /> : <LogOut className="size-3 text-muted-foreground" />}</span><span className="truncate">{event.displayName} {event.type === "join" ? "دخل الغرفة" : "غادر الغرفة"}</span></div>)}</div></section>
     <RoomRolesDialog roomId={roomId} roomName="الغرفة" permissions={roomPermissions} open={roleDialogOpen} onOpenChange={setRoleDialogOpen} />
   </>;
 }
