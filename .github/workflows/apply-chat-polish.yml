@@ -1,0 +1,103 @@
+name: Apply chat polish
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch chat UI
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          chat = Path('src/pages/ChatPage.tsx')
+          s = chat.read_text()
+
+          s = s.replace(
+              'import { RoomRolesDialog } from "@/components/chat/RoomRolesDialog";\n',
+              'import { RoomRolesDialog } from "@/components/chat/RoomRolesDialog";\nimport { buildDemoAmbientMessage } from "@/lib/demo-activity";\n'
+          )
+          s = s.replace(
+              '  const [unseen, setUnseen] = useState(0);\n',
+              '  const [unseen, setUnseen] = useState(0);\n  const [demoMessages, setDemoMessages] = useState<MessageWithAuthor[]>([]);\n'
+          )
+          s = s.replace(
+              '  const canManageRoles = permissions.canManageRoles || !!roles.data?.isAdmin || room.data?.owner_id === user?.id;\n',
+              '  const canManageRoles = permissions.canManageRoles || !!roles.data?.isAdmin || roleById.get(user?.id ?? "") === "admin" || room.data?.owner_id === user?.id;\n'
+          )
+          marker = '  const byId = useMemo(() => new Map(items.map((m) => [m.id, m])), [items]);\n'
+          insert = '''  const byId = useMemo(() => new Map(items.map((m) => [m.id, m])), [items]);\n\n  useEffect(() => {\n    if (!roomId) { setDemoMessages([]); return; }\n    const addDemo = () => {\n      if (document.visibilityState === "hidden") return;\n      const demo = buildDemoAmbientMessage(roomId);\n      if (!demo) return;\n      setDemoMessages((current) => {\n        if (current.some((item) => item.id === demo.id) || items.some((item) => item.id === demo.id)) return current;\n        return [...current, demo].slice(-8);\n      });\n    };\n    addDemo();\n    const timer = window.setInterval(addDemo, 18000);\n    return () => window.clearInterval(timer);\n  }, [roomId]);\n'''
+          if marker in s and 'const [demoMessages' in s and 'buildDemoAmbientMessage' in s and 'setDemoMessages' in s:
+              s = s.replace(marker, insert, 1)
+
+          s = s.replace(
+              '  const byId = useMemo(() => new Map(items.map((m) => [m.id, m])), [items]);\n\n  useEffect(() => {',
+              '  const byId = useMemo(() => new Map(items.map((m) => [m.id, m])), [items]);\n\n  useEffect(() => {',
+              1
+          )
+
+          old = '    const flat = [...(messages.data?.pages ?? [])].reverse().flat();\n    const seen = new Set<string>();\n    return flat.filter((message) => {\n      if (seen.has(message.id)) return false;\n      seen.add(message.id);\n      return !blockedIds.has(message.user_id);\n    });'
+          new = '    const flat = [...(messages.data?.pages ?? [])].reverse().flat();\n    const combined = [...flat, ...demoMessages].sort((a, b) => a.created_at.localeCompare(b.created_at));\n    const seen = new Set<string>();\n    return combined.filter((message) => {\n      if (seen.has(message.id)) return false;\n      seen.add(message.id);\n      return !blockedIds.has(message.user_id) && !message.is_deleted;\n    });'
+          s = s.replace(old, new)
+          s = s.replace('  }, [messages.data, blockedIds]);', '  }, [messages.data, blockedIds, demoMessages]);', 1)
+
+          s = s.replace(
+              'onChange: (message) => qc.setQueryData<any>(["messages", roomId], (prev: any) => prev ? { ...prev, pages: prev.pages.map((p: any) => p.map((x: any) => x.id === message.id ? { ...x, ...message } : x)) } : prev),',
+              'onChange: (message) => {\n      if (message.is_deleted) setDemoMessages((current) => current.filter((item) => item.id !== message.id));\n      qc.setQueryData<any>(["messages", roomId], (prev: any) => prev ? { ...prev, pages: prev.pages.map((p: any) => p.map((x: any) => x.id === message.id ? { ...x, ...message } : x)) } : prev);\n    },'
+          )
+
+          s = s.replace(
+              'className="flex min-h-0 h-[calc(100dvh-175px)] gap-2 overflow-hidden lg:gap-3"',
+              'className="flex min-h-0 h-[calc(100dvh-135px)] translate-y-1 gap-2 overflow-hidden lg:h-[calc(100dvh-175px)] lg:translate-y-0 lg:gap-3"'
+          )
+
+          old_role = '<div className="mb-0.5 flex flex-wrap items-center gap-1.5">\n                          <p className={admin ? "text-[10px] font-black text-rose-300" : mod ? "text-[10px] font-bold text-sky-300" : "text-[10px] font-semibold opacity-70"}>{admin ? "🌹 👑 " : ""}{name}</p>\n                          {admin ? <span className="rounded-full border border-rose-400/40 px-1.5 py-0.5 text-[7px] font-black text-rose-300">ADMIN</span> : mod ? <span className="rounded-full border border-sky-400/40 px-1.5 py-0.5 text-[7px] font-black text-sky-300">MOD</span> : null}\n                        </div>'
+          new_role = '<div className="mb-0.5 flex flex-wrap items-center gap-1.5">\n                          {admin ? <span className="rounded-full border border-rose-400/40 bg-rose-500/10 px-1.5 py-0.5 text-[7px] font-black text-rose-300">ADMIN</span> : mod ? <span className="rounded-full border border-sky-400/40 bg-sky-500/10 px-1.5 py-0.5 text-[7px] font-black text-sky-300">MOD</span> : null}\n                          <p className={admin ? "text-[10px] font-black text-rose-300" : mod ? "text-[10px] font-bold text-sky-300" : "text-[10px] font-semibold opacity-70"}>{admin ? "👑 " : ""}{name}</p>\n                        </div>'
+          s = s.replace(old_role, new_role)
+
+          chat.write_text(s)
+
+          layout = Path('src/layouts/AppLayout.tsx')
+          l = layout.read_text()
+          l = l.replace('pb-24 pt-5', 'pb-20 pt-5')
+          layout.write_text(l)
+
+          members = Path('src/components/chat/MembersPanel.tsx')
+          m = members.read_text()
+          m = m.replace(
+              '    {row.role === "admin" ? <Badge className="shrink-0 border-rose-400/40 bg-rose-500/15 px-1.5 py-0 text-[8px] font-black text-rose-300">ADMIN</Badge> : null}\n    {row.role === "owner" ? <Badge className="shrink-0 border-amber-400/30 bg-amber-500/10 px-1.5 py-0 text-[8px] font-black text-amber-300">مالك</Badge> : null}\n    {row.role === "moderator" ? <Badge className="shrink-0 border-sky-400/30 bg-sky-500/10 px-1.5 py-0 text-[8px] font-bold text-sky-300">MOD</Badge> : null}',
+              '    {row.role === "admin" ? <Badge className="order-first shrink-0 border-rose-400/40 bg-rose-500/15 px-1.5 py-0 text-[8px] font-black text-rose-300">ADMIN</Badge> : null}\n    {row.role === "owner" ? <Badge className="order-first shrink-0 border-amber-400/30 bg-amber-500/10 px-1.5 py-0 text-[8px] font-black text-amber-300">مالك</Badge> : null}\n    {row.role === "moderator" ? <Badge className="order-first shrink-0 border-sky-400/30 bg-sky-500/10 px-1.5 py-0 text-[8px] font-bold text-sky-300">MOD</Badge> : null}'
+          )
+          # Keep the mobile role control visible instead of relying on hover-only affordances.
+          needle = '  if (isMobile) return <>{open ? <div className="fixed inset-0 z-[70]" role="presentation">'
+          replacement = '  if (isMobile) return <>{!open && props.roomId ? <button type="button" onClick={() => setOpen(true)} className="fixed bottom-[5.75rem] end-3 z-[65] inline-flex h-10 items-center gap-1.5 rounded-full border bg-background/95 px-3 text-xs font-bold shadow-xl backdrop-blur" aria-label="فتح أعضاء الغرفة وتعديل الرتب"><Settings2 className="size-4" />الرتب</button> : null}{open ? <div className="fixed inset-0 z-[70]" role="presentation">'
+          m = m.replace(needle, replacement)
+          members.write_text(m)
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/ChatPage.tsx src/layouts/AppLayout.tsx src/components/chat/MembersPanel.tsx
+          git diff --cached --quiet || git commit -m "fix: polish mobile chat and room roles"
+          git push
+
+      - name: Remove temporary workflow
+        if: success()
+        run: |
+          rm -f .github/workflows/apply-chat-polish.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "chore: remove temporary patch workflow"
+          git push
