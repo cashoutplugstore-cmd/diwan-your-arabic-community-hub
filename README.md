@@ -60,3 +60,5 @@ cd <repository-name>
 npm i
 npm run dev
 ```
+
+<!-- Vercel auto-deploy trigger: main -->
