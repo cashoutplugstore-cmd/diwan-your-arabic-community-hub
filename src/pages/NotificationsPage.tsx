@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,12 +8,30 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { useAuth } from "@/contexts/auth-context";
 import { useI18n } from "@/contexts/i18n-context";
 import { markNotificationRead, notificationsQuery } from "@/services/notifications.service";
+import { supabase } from "@/integrations/supabase/client";
 
 export function NotificationsPage() {
   const { t } = useI18n();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const notifications = useQuery(notificationsQuery(user?.id));
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`notifications-${user.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` }, () => {
+        void queryClient.invalidateQueries({ queryKey: ["notifications", user.id] });
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` }, () => {
+        void queryClient.invalidateQueries({ queryKey: ["notifications", user.id] });
+      })
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [user?.id, queryClient]);
 
   const markRead = useMutation({
     mutationFn: (id: string) => markNotificationRead(id),
@@ -38,7 +57,7 @@ export function NotificationsPage() {
                 <p className="truncate text-sm text-muted-foreground">{item.body ?? "—"}</p>
               </div>
               {!item.is_read ? (
-                <Button size="sm" variant="ghost" onClick={() => markRead.mutate(item.id)}>
+                <Button size="sm" variant="ghost" onClick={() => markRead.mutate(item.id)} disabled={markRead.isPending}>
                   ✓
                 </Button>
               ) : null}
