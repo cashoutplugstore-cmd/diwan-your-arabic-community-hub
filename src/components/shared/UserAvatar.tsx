@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth-context";
 import { myRolesQuery } from "@/services/roles.service";
 import { profileQuery } from "@/services/profiles.service";
+import { looseDb } from "@/integrations/supabase/loose-db";
 
 type Role = "admin" | "moderator" | "vip" | "speaker";
 type Props = { name?: string | null | undefined; src?: string | null | undefined; size?: "sm" | "md" | "lg" | undefined; status?: string | null | undefined; role?: Role | null | undefined; className?: string | undefined; showMemberBadge?: boolean | undefined; autoCurrentRole?: boolean | undefined };
@@ -15,9 +16,10 @@ export function UserAvatar({ name, src, size = "md", status, role, className, sh
   const { user } = useAuth();
   const profile = useQuery({ ...profileQuery(user?.id), enabled: autoCurrentRole && Boolean(user?.id) });
   const currentRoles = useQuery({ ...myRolesQuery(user?.id), enabled: autoCurrentRole && Boolean(user?.id) });
+  const premium = useQuery({ queryKey: ["avatar-premium", user?.id], enabled: autoCurrentRole && Boolean(user?.id), staleTime: 60000, queryFn: async () => { if (!user?.id) return false; const { data } = await looseDb.from("premium_subscriptions").select("status,expires_at").eq("user_id", user.id).eq("status", "active").limit(1); const row = (data as any[] | null)?.[0]; return Boolean(row && (!row.expires_at || new Date(row.expires_at).getTime() > Date.now())); } });
   const currentName = profile.data?.display_name || profile.data?.username || user?.email?.split("@")[0] || "";
   const isCurrentUser = Boolean(autoCurrentRole && user?.id && name && currentName && name === currentName);
-  const effectiveRole: Role | null = role ?? (isCurrentUser && currentRoles.data?.isAdmin ? "admin" : isCurrentUser && currentRoles.data?.isModerator ? "moderator" : null);
+  const effectiveRole: Role | null = role ?? (isCurrentUser && currentRoles.data?.isAdmin ? "admin" : isCurrentUser && currentRoles.data?.isModerator ? "moderator" : isCurrentUser && premium.data ? "vip" : null);
   const Icon = effectiveRole === "admin" ? ShieldCheck : effectiveRole === "moderator" ? Shield : effectiveRole === "vip" ? Crown : Mic2;
   const isMember = (showMemberBadge || status === "online" || isCurrentUser) && !effectiveRole;
   return <div className={cn("relative shrink-0 pt-2", className)}>
