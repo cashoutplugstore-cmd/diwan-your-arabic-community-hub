@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { looseDb } from "@/integrations/supabase/loose-db";
 
-export type PremiumPlan = "vip" | "pro" | "community";
+export type PremiumPlan = "vip" | "monthly" | "four_months" | "yearly";
 
 export type PremiumSubscription = {
   id: string; user_id: string; plan: PremiumPlan;
@@ -10,9 +10,10 @@ export type PremiumSubscription = {
 };
 
 const PRICE_IDS: Record<PremiumPlan, string> = {
-  vip: "price_1U2cMXFCQ7iAbrC72v9QzhcA",
-  pro: "price_1U2cMbFCQ7iAbrC7XOvYa5Bj",
-  community: "price_1U2cMiFCQ7iAbrC7wfy7qI87",
+  vip: "price_1U2dKnFCQ7iAbrC7nBPBpwd3",
+  monthly: "price_1U2dKuFCQ7iAbrC7ORI6Lcdd",
+  four_months: "price_1U2dLBFCQ7iAbrC7mJWoTBwN",
+  yearly: "price_1U2dLLFCQ7iAbrC7QCrXs1q0",
 };
 
 export async function fetchMyPremiumSubscription(userId: string) {
