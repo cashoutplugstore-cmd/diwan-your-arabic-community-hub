@@ -95,6 +95,11 @@ export async function sendMessage(input: {
     reply_to_id: input.replyToId ?? null,
   });
   if (error) throw error;
+
+  // Local sequencing signal only: never stored as a chat message.
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(`diwan:last-real-message:${input.roomId}`, String(Date.now()));
+  }
 }
 
 export async function editMessage(id: string, content: string) {
