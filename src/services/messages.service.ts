@@ -8,6 +8,7 @@ export const MAX_MESSAGE_LENGTH = 2000;
 
 type AIReplyHandler = (reply: MessageWithAuthor) => void;
 const recentAIContent = new Map<string, string[]>();
+const scheduledAIByMessage = new Set<string>();
 
 /** Only real member messages are loaded as persistent conversation history. */
 export async function fetchMessagePage(roomId: string, before?: string | null): Promise<MessageWithAuthor[]> {
@@ -51,13 +52,12 @@ function uniqueAIContent(roomId: string, candidate: string, salt: number, source
   return normalized || "إي والله 😄";
 }
 
-function fallbackReply(author: Profile, roomId: string, source: string, salt: number): MessageWithAuthor {
+function fallbackReply(author: Profile, roomId: string, source: string, salt: number, createdAt: number): MessageWithAuthor {
   const content = uniqueAIContent(roomId, "", salt, source);
-  const now = Date.now() + salt * 1400;
-  return { id: `ai-fallback-${roomId}-${now}-${salt}`, room_id: roomId, user_id: author.id, content, created_at: new Date(now).toISOString(), reply_to_id: null, edited_at: null, is_deleted: false, author };
+  return { id: `ai-fallback-${roomId}-${createdAt}-${salt}`, room_id: roomId, user_id: author.id, content, created_at: new Date(createdAt).toISOString(), reply_to_id: null, edited_at: null, is_deleted: false, author };
 }
 
-async function requestAIRoomReply(roomId: string, message: string, salt: number, onReply?: AIReplyHandler) {
+async function requestAIRoomReply(roomId: string, message: string, salt: number, createdAt: number, onReply?: AIReplyHandler) {
   const author = aiAuthorFor(roomId, salt);
   try {
     const recent = (recentAIContent.get(roomId) ?? []).slice(-4);
@@ -71,29 +71,45 @@ async function requestAIRoomReply(roomId: string, message: string, salt: number,
     });
     if (!error && data?.text && onReply) {
       const content = uniqueAIContent(roomId, String(data.text), salt, message);
-      const now = Date.now() + salt * 1400;
-      onReply({ id: `ai-live-${roomId}-${now}-${salt}`, room_id: roomId, user_id: author.id, content, created_at: new Date(now).toISOString(), reply_to_id: null, edited_at: null, is_deleted: false, author });
+      onReply({ id: `ai-live-${roomId}-${createdAt}-${salt}`, room_id: roomId, user_id: author.id, content, created_at: new Date(createdAt).toISOString(), reply_to_id: null, edited_at: null, is_deleted: false, author });
       return;
     }
   } catch {
     // AI is optional; use a local varied fallback so the room never feels dead.
   }
-  onReply?.(fallbackReply(author, roomId, message, salt));
+  onReply?.(fallbackReply(author, roomId, message, salt, createdAt));
+}
+
+/** Schedule natural community reactions for one real message. */
+export function triggerAIRoomReplies(input: { roomId: string; messageId: string; message: string; createdAt: string; onReply?: AIReplyHandler }) {
+  if (!input.onReply || !input.message.trim()) return;
+  const key = `${input.roomId}:${input.messageId}`;
+  if (scheduledAIByMessage.has(key)) return;
+  scheduledAIByMessage.add(key);
+
+  const base = new Date(input.createdAt).getTime();
+  const firstDelay = 1800 + Math.floor(Math.random() * 1200);
+  const secondDelay = 4300 + Math.floor(Math.random() * 1700);
+
+  void requestAIRoomReply(input.roomId, input.message, 1, base + firstDelay, input.onReply);
+  if (typeof window !== "undefined") {
+    window.setTimeout(() => void requestAIRoomReply(input.roomId, input.message, 2, base + secondDelay, input.onReply), secondDelay);
+  } else {
+    void requestAIRoomReply(input.roomId, input.message, 2, base + secondDelay, input.onReply);
+  }
 }
 
 export async function sendMessage(input: { roomId: string; userId: string; content: string; replyToId?: string | null; onAIReply?: AIReplyHandler }) {
   const content = input.content.trim().slice(0, MAX_MESSAGE_LENGTH);
   if (!content) throw new Error("empty");
-  const { error } = await supabase.from("messages").insert({ room_id: input.roomId, user_id: input.userId, content, reply_to_id: input.replyToId ?? null });
+  const clientCreatedAt = new Date().toISOString();
+  const { data, error } = await supabase.from("messages").insert({ room_id: input.roomId, user_id: input.userId, content, reply_to_id: input.replyToId ?? null }).select("id,created_at").single();
   if (error) throw error;
   if (typeof window !== "undefined") window.localStorage.setItem(`diwan:last-real-message:${input.roomId}`, String(Date.now()));
 
-  // Keep the room lively without flooding it: at most two varied community replies per real message.
-  void requestAIRoomReply(input.roomId, content, 1, input.onAIReply);
-  if (input.onAIReply && typeof window !== "undefined") {
-    const secondDelay = 2800 + Math.floor(Math.random() * 2600);
-    window.setTimeout(() => void requestAIRoomReply(input.roomId, content, 2, input.onAIReply), secondDelay);
-  }
+  const messageId = data?.id ?? `${input.userId}:${clientCreatedAt}`;
+  const createdAt = data?.created_at ?? clientCreatedAt;
+  triggerAIRoomReplies({ roomId: input.roomId, messageId, message: content, createdAt, onReply: input.onAIReply });
 }
 
 export async function editMessage(id: string, content: string) {
