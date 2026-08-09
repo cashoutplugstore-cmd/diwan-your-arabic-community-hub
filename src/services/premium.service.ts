@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export type PremiumPlan = "vip_biweekly" | "pro_monthly" | "community_monthly";
+export type PremiumPlan = "weekly" | "monthly" | "yearly";
 
 export type PremiumSubscription = {
   id: string;
