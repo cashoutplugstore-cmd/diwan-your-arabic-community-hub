@@ -23,7 +23,7 @@ export const secondaryNav: NavItem[] = [
 export const mobileNav: NavItem[] = [
   { to: "/rooms", label: (t) => t.nav.rooms, icon: Compass },
   { to: "/chat", label: (t) => t.nav.chat, icon: MessagesSquare },
-  { to: "/friends", label: (t) => t.nav.friends, icon: Users },
+  { to: "/premium", label: () => "VIP", icon: Crown },
   { to: "/notifications", label: (t) => t.nav.notifications, icon: Bell },
   { to: "/profile", label: (t) => t.nav.profile, icon: User },
 ];
