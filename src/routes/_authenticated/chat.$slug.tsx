@@ -20,3 +20,5 @@ function ChatRoomRoute() {
   const { slug } = Route.useParams();
   return <ChatRoomPage slug={slug} />;
 }
+
+// Keep the chat route as the deployment entry point for the current UI.
