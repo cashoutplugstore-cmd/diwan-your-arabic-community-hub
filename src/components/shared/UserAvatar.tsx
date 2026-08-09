@@ -32,6 +32,7 @@ export function UserAvatar({ name, src, size = "md", status, role, className, sh
     },
   });
 
+  // Public badge lookup is intentionally independent of the viewer's own role.
   const publicStaff = useQuery({
     queryKey: ["public-avatar-staff"],
     enabled: Boolean(name && !role),
