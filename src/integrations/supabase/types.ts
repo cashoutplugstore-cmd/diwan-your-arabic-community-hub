@@ -422,6 +422,10 @@ export type Database = {
       }
     }
     Functions: {
+      can_manage_room_roles: {
+        Args: { _room_id: string; _user_id: string }
+        Returns: boolean
+      }
       can_moderate_room: {
         Args: { _room_id: string; _user_id: string }
         Returns: boolean
