@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { looseDb } from "@/integrations/supabase/loose-db";
 
 export type PremiumPlan = "weekly" | "monthly" | "yearly";
 
@@ -13,7 +14,7 @@ export type PremiumSubscription = {
 };
 
 export async function fetchMyPremiumSubscription(userId: string) {
-  const { data, error } = await supabase
+  const { data, error } = await looseDb
     .from("premium_subscriptions")
     .select("id,user_id,plan,status,started_at,expires_at,created_at")
     .eq("user_id", userId)
@@ -25,7 +26,7 @@ export async function fetchMyPremiumSubscription(userId: string) {
 }
 
 export async function requestPremium(userId: string, plan: PremiumPlan) {
-  const { data: existing, error: existingError } = await supabase
+  const { data: existing, error: existingError } = await looseDb
     .from("premium_subscriptions")
     .select("id,status")
     .eq("user_id", userId)
@@ -38,7 +39,7 @@ export async function requestPremium(userId: string, plan: PremiumPlan) {
     throw new Error("لديك طلب اشتراك قيد المراجعة بالفعل.");
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await looseDb
     .from("premium_subscriptions")
     .insert({ user_id: userId, plan, status: "pending" })
     .select("id,user_id,plan,status,started_at,expires_at,created_at")
@@ -48,7 +49,7 @@ export async function requestPremium(userId: string, plan: PremiumPlan) {
 }
 
 export async function hasActivePremium(userId: string) {
-  const { data, error } = await supabase.rpc("has_active_premium", { check_user_id: userId });
+  const { data, error } = await looseDb.rpc("has_active_premium", { check_user_id: userId });
   if (error) throw error;
   return Boolean(data);
 }

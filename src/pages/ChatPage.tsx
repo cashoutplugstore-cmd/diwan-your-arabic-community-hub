@@ -145,7 +145,7 @@ export function ChatRoomPage({ slug }: { slug: string }) {
       const { data } = await supabase.from("profiles").select("*").eq("id", message.user_id).maybeSingle();
       author = data ?? null;
     }
-    qc.setQueryData<any>(["messages", roomId], (prev) => {
+    qc.setQueryData<any>(["messages", roomId], (prev: any) => {
       if (!prev) return prev;
       const pages = prev.pages.map((p: any) => p.slice());
       if (!pages[0] || pages[0].some((m: any) => m.id === message.id)) return prev;
@@ -160,7 +160,7 @@ export function ChatRoomPage({ slug }: { slug: string }) {
 
   useRealtimeMessages(roomId, {
     onInsert: (message) => void appendIncoming(message),
-    onChange: (message) => qc.setQueryData<any>(["messages", roomId], (prev) => prev ? { ...prev, pages: prev.pages.map((p: any) => p.map((x: any) => x.id === message.id ? { ...x, ...message } : x)) } : prev),
+    onChange: (message) => qc.setQueryData<any>(["messages", roomId], (prev: any) => prev ? { ...prev, pages: prev.pages.map((p: any) => p.map((x: any) => x.id === message.id ? { ...x, ...message } : x)) } : prev),
   });
 
   useEffect(() => {
@@ -184,7 +184,7 @@ export function ChatRoomPage({ slug }: { slug: string }) {
         created_at: new Date().toISOString(), reply_to_id: replyTo?.id ?? null,
         edited_at: null, is_deleted: false, author: profile.data ?? null,
       };
-      qc.setQueryData<any>(["messages", roomId], (prev) => {
+      qc.setQueryData<any>(["messages", roomId], (prev: any) => {
         if (!prev) return prev;
         const pages = prev.pages.map((p: any) => p.slice());
         pages[0]?.push(optimistic);
@@ -292,7 +292,7 @@ export function ChatRoomPage({ slug }: { slug: string }) {
                 <div key={message.id} className="space-y-2">
                   {showDay ? <div className="flex items-center gap-2 py-1"><span className="h-px flex-1 bg-border" /><span className="rounded-full bg-secondary px-2.5 py-1 text-[9px] font-semibold text-muted-foreground">{dayLabel(message.created_at, locale, t.chat)}</span><span className="h-px flex-1 bg-border" /></div> : null}
                   <div className={`group flex items-end gap-2 ${mine ? "flex-row-reverse" : ""}`}>
-                    <UserAvatar name={name} src={message.author?.avatar_url} size="sm" status={presence.onlineIds.has(message.user_id) ? "online" : undefined} role={messageRole ?? null} />
+                    <UserAvatar name={name} src={message.author?.avatar_url ?? null} size="sm" status={presence.onlineIds.has(message.user_id) ? "online" : undefined} role={messageRole ?? null} />
                     <div className={`min-w-0 max-w-[86%] sm:max-w-[72%] ${mine ? "items-end" : "items-start"}`}>
                       <div className={`rounded-2xl px-3.5 py-2 ${mine ? "rounded-te-md" : "rounded-ts-md"} ${bubble}`}>
                         <div className="mb-0.5 flex flex-wrap items-center gap-1.5">
@@ -340,9 +340,9 @@ export function ChatRoomPage({ slug }: { slug: string }) {
       </section>
 
       <div className="hidden min-h-0 w-[250px] shrink-0 lg:flex">
-        <MembersPanel members={members.data ?? []} presence={presence.entries} roomId={roomId} />
+        <MembersPanel members={members.data ?? []} presence={presence.entries} roomId={roomId ?? undefined} />
       </div>
-      <div className="lg:hidden"><MembersPanel members={members.data ?? []} presence={presence.entries} roomId={roomId} /></div>
+      <div className="lg:hidden"><MembersPanel members={members.data ?? []} presence={presence.entries} roomId={roomId ?? undefined} /></div>
     </div>
   );
 }

@@ -46,9 +46,9 @@ export function FriendsPage() {
     return (
       <li className="glass flex items-center gap-3 rounded-2xl p-4">
         <UserAvatar
-          name={item.other?.display_name || item.other?.username}
-          src={item.other?.avatar_url}
-          status={item.other?.status}
+          name={item.other?.display_name || item.other?.username || null}
+          src={item.other?.avatar_url ?? null}
+          status={item.other?.status ?? null}
         />
         <div className="min-w-0 flex-1">
           <p className="truncate font-medium">
