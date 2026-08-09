@@ -16,3 +16,27 @@
 @utility scrollbar-slim { scrollbar-width: thin; scrollbar-color: var(--color-border) transparent; }
 @media (min-width: 768px) { main:has(.glass-strong) > .flex.gap-4 { width: min(100%, 1580px); margin-inline: auto; gap: 10px; direction: ltr; } main:has(.glass-strong) > .flex.gap-4 > .glass-strong { order: 1; border-radius: 10px; box-shadow: 0 16px 50px -35px oklch(0 0 0 / 60%); } main:has(.glass-strong) > .flex.gap-4 > aside { order: 2; width: 285px; min-width: 285px; border-radius: 10px; background: color-mix(in oklab, var(--card) 94%, transparent); border: 1px solid var(--border); box-shadow: 0 16px 50px -35px oklch(0 0 0 / 60%); } main:has(.glass-strong) > .flex.gap-4 > .glass-strong > header, main:has(.glass-strong) > .flex.gap-4 > aside header { min-height: 58px; background: color-mix(in oklab, var(--secondary) 46%, transparent); } main:has(.glass-strong) > .flex.gap-4 > .glass-strong > div.overflow-y-auto { padding: 18px 22px; background: color-mix(in oklab, var(--background) 78%, var(--card)); } main:has(.glass-strong) > .flex.gap-4 > .glass-strong > form { min-height: 66px; padding: 10px 12px; background: color-mix(in oklab, var(--secondary) 38%, transparent); } }
 @media (max-width: 767px) { main { padding: 0 !important; } main:has(.glass-strong) > .flex.gap-4 { display: grid; grid-template-rows: minmax(0, 1fr) auto; width: 100%; min-height: calc(100dvh - 118px); height: auto; margin: 0; padding: 0 10px 16px; gap: 10px; } main:has(.glass-strong) > .flex.gap-4 > .glass-strong { display: flex; flex-direction: column; width: 100%; min-height: 0; height: min(720px, calc(100dvh - 230px)); border-radius: 16px; overflow: hidden; background: var(--background); border: 1px solid var(--border); box-shadow: none; } main:has(.glass-strong) > .flex.gap-4 > aside { display: flex !important; width: 100%; min-width: 0; height: 145px; max-height: 145px; border-radius: 16px; overflow: hidden; } main:has(.glass-strong) > .flex.gap-4 > .glass-strong > header { flex: 0 0 auto; min-height: 62px; padding: 10px 14px; border-bottom: 1px solid var(--border); background: color-mix(in oklab, var(--secondary) 55%, var(--background)); } main:has(.glass-strong) > .flex.gap-4 > .glass-strong > header h1 { font-size: 18px; } main:has(.glass-strong) > .flex.gap-4 > .glass-strong > div.overflow-y-auto { flex: 1 1 auto; min-height: 0; padding: 14px 10px 18px; background: var(--background); overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; } main:has(.glass-strong) > .flex.gap-4 > .glass-strong > form { position: relative; z-index: 5; flex: 0 0 auto; min-height: 76px; padding: 8px 10px 10px; gap: 6px; border-top: 1px solid var(--border); background: color-mix(in oklab, var(--secondary) 48%, var(--background)); } main:has(.glass-strong) > .flex.gap-4 > .glass-strong > form textarea { min-height: 52px; max-height: 110px; padding: 12px 46px 12px 14px; border-radius: 14px; background: var(--card); border-color: var(--border); font-size: 16px; } main:has(.glass-strong) > .flex.gap-4 > .glass-strong > form button { min-height: 44px; } }
+
+/* Diwan chat cleanup: ChatPage uses gap-2, so the older gap-4 selectors above did not reach it. */
+@media (min-width: 768px) {
+  main:has(.glass-strong) > div.flex.gap-2 { width: min(100%, 1580px); margin-inline: auto; gap: 10px; direction: ltr; }
+  main:has(.glass-strong) > div.flex.gap-2 > .glass-strong { order: 1; border-radius: 16px; box-shadow: 0 16px 50px -35px oklch(0 0 0 / 60%); }
+  main:has(.glass-strong) > div.flex.gap-2 > div[class*="w-[250px]"] { order: 2; width: 285px; min-width: 285px; }
+}
+
+/* There is one authoritative role-control in the chat header. The member panel must not render another copy. */
+main:has(.glass-strong) aside.glass [aria-label="تعديل الرتب والصلاحيات"],
+main:has(.glass-strong) aside[role="dialog"] [aria-label="تعديل الرتب والصلاحيات"] { display: none !important; }
+
+@media (max-width: 767px) {
+  main:has(.glass-strong) > div.flex.gap-2 { display: flex; width: 100%; min-height: calc(100dvh - 115px); height: calc(100dvh - 115px); margin: 0; padding: 0 8px calc(78px + env(safe-area-inset-bottom)); gap: 8px; }
+  main:has(.glass-strong) > div.flex.gap-2 > .glass-strong { display: flex; flex: 1 1 auto; min-width: 0; width: 100%; min-height: 0; height: 100%; border-radius: 16px; overflow: hidden; }
+  main:has(.glass-strong) > div.flex.gap-2 > div[class*="w-[250px]"] { display: none; }
+  main:has(.glass-strong) > div.flex.gap-2 > .glass-strong > header { min-height: 58px; padding: 8px 10px; gap: 8px; }
+  main:has(.glass-strong) > div.flex.gap-2 > .glass-strong > header h1 { font-size: 15px; line-height: 1.25; }
+  main:has(.glass-strong) > div.flex.gap-2 > .glass-strong > header p { font-size: 9px; }
+  main:has(.glass-strong) > div.flex.gap-2 > .glass-strong > div.overflow-y-auto { min-height: 0; flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 10px 8px 12px; }
+  main:has(.glass-strong) > div.flex.gap-2 > .glass-strong > form { min-height: 68px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); }
+  main:has(.glass-strong) > div.flex.gap-2 > .glass-strong > form textarea { min-height: 46px; max-height: 90px; font-size: 16px; }
+  main:has(.glass-strong) > div.flex.gap-2 > .glass-strong > form button { min-height: 42px; min-width: 42px; }
+}
