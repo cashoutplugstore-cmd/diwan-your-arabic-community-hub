@@ -25,8 +25,8 @@ export function useRoomPresence(roomId: string | undefined, me: { userId: string
       const nextMap = new Map(next.map((entry) => [entry.userId, entry.displayName]));
       const previous = previousRef.current;
       const now = new Date().toISOString();
-      next.forEach((entry) => { if (!previous.has(entry.userId)) setActivity((items) => [{ id: crypto.randomUUID(), type: "join", displayName: entry.displayName, at: now }, ...items].slice(0, 8)); });
-      previous.forEach((displayName, userId) => { if (!nextMap.has(userId)) setActivity((items) => [{ id: crypto.randomUUID(), type: "leave", displayName, at: now }, ...items].slice(0, 8)); });
+      next.forEach((entry) => { if (!previous.has(entry.userId)) setActivity((items) => [{ id: crypto.randomUUID(), type: "join" as const, displayName: entry.displayName, at: now }, ...items].slice(0, 8)); });
+      previous.forEach((displayName, userId) => { if (!nextMap.has(userId)) setActivity((items) => [{ id: crypto.randomUUID(), type: "leave" as const, displayName, at: now }, ...items].slice(0, 8)); });
       previousRef.current = nextMap;
       setEntries(next);
     };
