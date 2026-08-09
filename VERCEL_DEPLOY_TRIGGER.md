@@ -2,7 +2,10 @@
 
 This file intentionally triggers a fresh Vercel Production deployment from `main` after the latest Diwan chat/member identity updates.
 
-- Chat member identity badges
-- Admin/moderator/VIP identity
-- Room member presentation
-- Mobile chat layout
+- Chat history: real persisted member messages only
+- No synthetic ambient message history
+- AI replies are ephemeral and only start after a real member message
+- Demo identities are never inserted into the real messages table
+- Role control remains single and subtle in the room header
+
+Deployment sync marker: 2026-08-09T23:11:00Z
