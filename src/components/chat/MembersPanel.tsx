@@ -19,6 +19,7 @@ type Props = { members: Profile[]; presence: PresenceEntry[]; activity?: Presenc
 type Role = "admin" | "moderator" | "vip" | "speaker" | "owner" | "member" | null;
 type Row = { id: string; name: string; avatar: string | null; status: "online" | "away" | "offline"; role: Role; speaking: boolean; demo?: boolean };
 
+// The chat header owns the single room-role control; this panel intentionally contains members only.
 function PanelContent({ members, presence, activity = [], roomId }: Props) {
   const { t } = useI18n();
   const { user } = useAuth();
