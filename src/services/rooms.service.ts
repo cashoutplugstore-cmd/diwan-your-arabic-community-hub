@@ -15,7 +15,20 @@ type CommunityRoom = RoomWithStats & {
   last_activity_at: string | null;
 };
 
-const EUROPE_COUNTRIES = new Set(["finland-arabs", "france", "uk"]);
+// Public directory policy: only Arab countries are shown in the communities UI.
+// Keep this as a whitelist so unknown/foreign country values never leak into the Arabic directory.
+const ARAB_COUNTRIES = new Set([
+  "algeria", "algeria-arabs", "bahrain", "comoros", "djibouti", "egypt", "iraq", "jordan",
+  "kuwait", "lebanon", "libya", "mauritania", "morocco", "oman", "palestine", "qatar",
+  "saudi-arabia", "saudi", "somalia", "sudan", "syria", "tunisia", "uae", "united-arab-emirates",
+  "yemen", "الجزائر", "البحرين", "جزر القمر", "جيبوتي", "مصر", "العراق", "الأردن", "الكويت",
+  "لبنان", "ليبيا", "موريتانيا", "المغرب", "عمان", "فلسطين", "قطر", "السعودية", "الصومال",
+  "السودان", "سوريا", "تونس", "الإمارات", "اليمن",
+]);
+
+function isArabicCountry(countryCode?: string | null) {
+  return ARAB_COUNTRIES.has((countryCode ?? "").trim().toLowerCase());
+}
 
 function normalizeRoom(room: RoomDb): CommunityRoom {
   const countryCode = room.country_code ?? null;
@@ -25,7 +38,7 @@ function normalizeRoom(room: RoomDb): CommunityRoom {
 
   return {
     ...room,
-    region: EUROPE_COUNTRIES.has(countryCode ?? "") ? "europe" : "arab",
+    region: isArabicCountry(countryCode) ? "arab" : "europe",
     country,
     city,
     last_activity_at: lastActivity,
@@ -41,7 +54,7 @@ export async function fetchRooms(): Promise<Room[]> {
   return (data ?? []).map((room) => normalizeRoom(room as RoomDb)) as Room[];
 }
 
-/** Fetch rooms using the current database schema. Stats are optional and must never prevent rooms from loading. */
+/** Fetch only public-directory rooms from Arabic countries. */
 export async function fetchRoomsWithStats(): Promise<RoomWithStats[]> {
   const { data, error } = await supabase
     .from("rooms")
@@ -49,41 +62,42 @@ export async function fetchRoomsWithStats(): Promise<RoomWithStats[]> {
     .order("created_at", { ascending: false });
   if (error) throw error;
 
-  return (data ?? []).map((rawRoom) => {
-    const room = normalizeRoom(rawRoom as RoomDb);
-    return {
-      ...room,
-      member_count: 0,
-      message_count: 0,
-      last_message_at: null,
-    };
-  }) as RoomWithStats[];
+  return (data ?? [])
+    .map((rawRoom) => rawRoom as RoomDb)
+    .filter((room) => !room.is_private && isArabicCountry(room.country_code))
+    .map((rawRoom) => {
+      const room = normalizeRoom(rawRoom);
+      return {
+        ...room,
+        member_count: 0,
+        message_count: 0,
+        last_message_at: null,
+      };
+    }) as RoomWithStats[];
 }
 
-/** Groups public rooms into region → country → city using the current rooms schema. */
+/** Groups Arabic public rooms into country → city. */
 export function buildCommunityTree(rooms: RoomWithStats[]): RegionNode[] {
-  const regions: RegionNode[] = [];
-  for (const region of ["arab", "europe"] as const) {
-    const scoped = rooms.filter((r) => (r as CommunityRoom).region === region && !r.is_private);
-    if (scoped.length === 0) continue;
-    const byCountry = new Map<string, CountryNode>();
-    for (const room of scoped) {
-      const country = (room as CommunityRoom).country ?? "—";
-      const node = byCountry.get(country) ?? { country, cities: [], member_count: 0, message_count: 0 };
-      node.cities.push(room);
-      node.member_count += room.member_count;
-      node.message_count += room.message_count;
-      byCountry.set(country, node);
-    }
-    const countries = [...byCountry.values()].sort((a, b) => b.message_count - a.message_count);
-    regions.push({
-      region,
-      countries,
-      room_count: scoped.length,
-      member_count: countries.reduce((sum, c) => sum + c.member_count, 0),
-    });
+  const scoped = rooms.filter((r) => (r as CommunityRoom).region === "arab" && !r.is_private);
+  if (scoped.length === 0) return [];
+
+  const byCountry = new Map<string, CountryNode>();
+  for (const room of scoped) {
+    const country = (room as CommunityRoom).country ?? "—";
+    const node = byCountry.get(country) ?? { country, cities: [], member_count: 0, message_count: 0 };
+    node.cities.push(room);
+    node.member_count += room.member_count;
+    node.message_count += room.message_count;
+    byCountry.set(country, node);
   }
-  return regions;
+
+  const countries = [...byCountry.values()].sort((a, b) => b.message_count - a.message_count);
+  return [{
+    region: "arab",
+    countries,
+    room_count: scoped.length,
+    member_count: countries.reduce((sum, c) => sum + c.member_count, 0),
+  }];
 }
 
 /**
@@ -173,9 +187,9 @@ export async function leaveRoom(roomId: string, userId: string) {
 }
 
 export const roomsQuery = () => queryOptions({ queryKey: ["rooms"], queryFn: fetchRooms });
-export const roomsWithStatsQuery = () => queryOptions({ queryKey: ["rooms", "stats"], queryFn: fetchRoomsWithStats, staleTime: 30_000 });
+export const roomsWithStatsQuery = () => queryOptions({ queryKey: ["rooms", "stats", "arab-only"], queryFn: fetchRoomsWithStats, staleTime: 30_000 });
 export const roomMembersQuery = (roomId: string | undefined) => queryOptions({ queryKey: ["room_members", "profiles", roomId], queryFn: () => fetchRoomMembers(roomId!), enabled: Boolean(roomId) });
 export const roomQuery = (slug: string) => queryOptions({ queryKey: ["rooms", slug], queryFn: () => fetchRoomBySlug(slug) });
 export const myMembershipsQuery = (userId: string | undefined) => queryOptions({ queryKey: ["room_members", userId], queryFn: () => fetchMyMemberships(userId!), enabled: Boolean(userId) });
 
-// Production redeploy marker: rooms are loaded directly from the current public rooms schema.
+// Public directory is intentionally Arabic-only. Private rooms remain addressable by their slug.
