@@ -2,25 +2,57 @@ import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { CountryNode, Profile, RegionNode, Room, RoomMember, RoomWithStats } from "@/types";
 
+type RoomDb = Room & {
+  country_code?: string | null;
+  city_name?: string | null;
+  created_at?: string | null;
+};
+
+type CommunityRoom = RoomWithStats & {
+  region: "arab" | "europe";
+  country: string;
+  city: string | null;
+  last_activity_at: string | null;
+};
+
+const EUROPE_COUNTRIES = new Set(["finland-arabs", "france", "uk"]);
+
+function normalizeRoom(room: RoomDb): CommunityRoom {
+  const countryCode = room.country_code ?? null;
+  const country = countryCode ?? "—";
+  const city = room.city_name ?? null;
+  const lastActivity = room.created_at ?? null;
+
+  return {
+    ...room,
+    region: EUROPE_COUNTRIES.has(countryCode ?? "") ? "europe" : "arab",
+    country,
+    city,
+    last_activity_at: lastActivity,
+  } as CommunityRoom;
+}
+
 export async function fetchRooms(): Promise<Room[]> {
   const { data, error } = await supabase
     .from("rooms")
     .select("*")
-    .order("last_activity_at", { ascending: false });
+    .order("created_at", { ascending: false });
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map((room) => normalizeRoom(room as RoomDb)) as Room[];
 }
 
 /** Rooms joined with their real stats (member / message counts) in two queries — no N+1. */
 export async function fetchRoomsWithStats(): Promise<RoomWithStats[]> {
   const [roomsRes, statsRes] = await Promise.all([
-    supabase.from("rooms").select("*").order("last_activity_at", { ascending: false }),
+    supabase.from("rooms").select("*").order("created_at", { ascending: false }),
     supabase.from("room_stats").select("*"),
   ]);
   if (roomsRes.error) throw roomsRes.error;
   if (statsRes.error) throw statsRes.error;
+
   const stats = new Map((statsRes.data ?? []).map((s) => [s.room_id, s]));
-  return (roomsRes.data ?? []).map((room) => {
+  return (roomsRes.data ?? []).map((rawRoom) => {
+    const room = normalizeRoom(rawRoom as RoomDb);
     const s = stats.get(room.id);
     return {
       ...room,
@@ -28,20 +60,19 @@ export async function fetchRoomsWithStats(): Promise<RoomWithStats[]> {
       message_count: Number(s?.message_count ?? 0),
       last_message_at: s?.last_message_at ?? null,
     };
-  });
+  }) as RoomWithStats[];
 }
 
-/** Groups public rooms into region → country → city using real data only. */
+/** Groups public rooms into region → country → city using the current rooms schema. */
 export function buildCommunityTree(rooms: RoomWithStats[]): RegionNode[] {
   const regions: RegionNode[] = [];
   for (const region of ["arab", "europe"] as const) {
-    const scoped = rooms.filter((r) => r.region === region && !r.is_private);
+    const scoped = rooms.filter((r) => (r as CommunityRoom).region === region && !r.is_private);
     if (scoped.length === 0) continue;
     const byCountry = new Map<string, CountryNode>();
     for (const room of scoped) {
-      const country = room.country ?? "—";
-      const node =
-        byCountry.get(country) ?? { country, cities: [], member_count: 0, message_count: 0 };
+      const country = (room as CommunityRoom).country ?? "—";
+      const node = byCountry.get(country) ?? { country, cities: [], member_count: 0, message_count: 0 };
       node.cities.push(room);
       node.member_count += room.member_count;
       node.message_count += room.message_count;
@@ -78,7 +109,7 @@ export async function fetchRoomMembers(roomId: string): Promise<Profile[]> {
 export async function fetchRoomBySlug(slug: string): Promise<Room | null> {
   const { data, error } = await supabase.from("rooms").select("*").eq("slug", slug).maybeSingle();
   if (error) throw error;
-  return data;
+  return data ? (normalizeRoom(data as RoomDb) as Room) : null;
 }
 
 export async function fetchMyMemberships(userId: string): Promise<RoomMember[]> {
@@ -93,12 +124,7 @@ export async function createRoom(input: {
   isPrivate: boolean;
   ownerId: string;
 }): Promise<Room> {
-  const slug =
-    input.name
-      .trim()
-      .toLowerCase()
-      .replace(/[^\p{L}\p{N}]+/gu, "-")
-      .replace(/^-|-$/g, "") || "room";
+  const slug = input.name.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "") || "room";
   const { data, error } = await supabase
     .from("rooms")
     .insert({
@@ -112,7 +138,7 @@ export async function createRoom(input: {
     .single();
   if (error) throw error;
   await supabase.from("room_members").insert({ room_id: data.id, user_id: input.ownerId, role: "owner" });
-  return data;
+  return normalizeRoom(data as RoomDb) as Room;
 }
 
 export async function joinRoom(roomId: string, userId: string) {
@@ -121,32 +147,12 @@ export async function joinRoom(roomId: string, userId: string) {
 }
 
 export async function leaveRoom(roomId: string, userId: string) {
-  const { error } = await supabase
-    .from("room_members")
-    .delete()
-    .eq("room_id", roomId)
-    .eq("user_id", userId);
+  const { error } = await supabase.from("room_members").delete().eq("room_id", roomId).eq("user_id", userId);
   if (error) throw error;
 }
 
 export const roomsQuery = () => queryOptions({ queryKey: ["rooms"], queryFn: fetchRooms });
-
-export const roomsWithStatsQuery = () =>
-  queryOptions({ queryKey: ["rooms", "stats"], queryFn: fetchRoomsWithStats, staleTime: 30_000 });
-
-export const roomMembersQuery = (roomId: string | undefined) =>
-  queryOptions({
-    queryKey: ["room_members", "profiles", roomId],
-    queryFn: () => fetchRoomMembers(roomId!),
-    enabled: Boolean(roomId),
-  });
-
-export const roomQuery = (slug: string) =>
-  queryOptions({ queryKey: ["rooms", slug], queryFn: () => fetchRoomBySlug(slug) });
-
-export const myMembershipsQuery = (userId: string | undefined) =>
-  queryOptions({
-    queryKey: ["room_members", userId],
-    queryFn: () => fetchMyMemberships(userId!),
-    enabled: Boolean(userId),
-  });
+export const roomsWithStatsQuery = () => queryOptions({ queryKey: ["rooms", "stats"], queryFn: fetchRoomsWithStats, staleTime: 30_000 });
+export const roomMembersQuery = (roomId: string | undefined) => queryOptions({ queryKey: ["room_members", "profiles", roomId], queryFn: () => fetchRoomMembers(roomId!), enabled: Boolean(roomId) });
+export const roomQuery = (slug: string) => queryOptions({ queryKey: ["rooms", slug], queryFn: () => fetchRoomBySlug(slug) });
+export const myMembershipsQuery = (userId: string | undefined) => queryOptions({ queryKey: ["room_members", userId], queryFn: () => fetchMyMemberships(userId!), enabled: Boolean(userId) });
