@@ -86,19 +86,43 @@ export function buildCommunityTree(rooms: RoomWithStats[]): RegionNode[] {
   return regions;
 }
 
+/**
+ * Fetch room members plus global staff/room owner so role badges can be resolved
+ * consistently for every viewer, including when an admin is not present in
+ * room_members. This is read-only; it does not grant any permissions.
+ */
 export async function fetchRoomMembers(roomId: string): Promise<Profile[]> {
-  const { data, error } = await supabase
+  const { data: room, error: roomError } = await supabase
+    .from("rooms")
+    .select("owner_id")
+    .eq("id", roomId)
+    .maybeSingle();
+  if (roomError) throw roomError;
+
+  const { data: members, error: membersError } = await supabase
     .from("room_members")
     .select("user_id")
     .eq("room_id", roomId)
     .limit(200);
-  if (error) throw error;
-  const ids = (data ?? []).map((m) => m.user_id);
-  if (ids.length === 0) return [];
+  if (membersError) throw membersError;
+
+  const { data: staff, error: staffError } = await supabase
+    .from("user_roles")
+    .select("user_id,role")
+    .in("role", ["admin", "moderator"]);
+  if (staffError) throw staffError;
+
+  const ids = new Set<string>();
+  for (const row of members ?? []) if (row.user_id) ids.add(row.user_id);
+  if (room?.owner_id) ids.add(room.owner_id);
+  for (const row of staff ?? []) if (row.user_id) ids.add(row.user_id);
+
+  if (ids.size === 0) return [];
+
   const { data: profiles, error: profilesError } = await supabase
     .from("profiles")
     .select("*")
-    .in("id", ids);
+    .in("id", [...ids]);
   if (profilesError) throw profilesError;
   return profiles ?? [];
 }
