@@ -41,24 +41,21 @@ export async function fetchRooms(): Promise<Room[]> {
   return (data ?? []).map((room) => normalizeRoom(room as RoomDb)) as Room[];
 }
 
-/** Rooms joined with their real stats (member / message counts) in two queries — no N+1. */
+/** Fetch rooms using the current database schema. Stats are optional and must never prevent rooms from loading. */
 export async function fetchRoomsWithStats(): Promise<RoomWithStats[]> {
-  const [roomsRes, statsRes] = await Promise.all([
-    supabase.from("rooms").select("*").order("created_at", { ascending: false }),
-    supabase.from("room_stats").select("*"),
-  ]);
-  if (roomsRes.error) throw roomsRes.error;
-  if (statsRes.error) throw statsRes.error;
+  const { data, error } = await supabase
+    .from("rooms")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
 
-  const stats = new Map((statsRes.data ?? []).map((s) => [s.room_id, s]));
-  return (roomsRes.data ?? []).map((rawRoom) => {
+  return (data ?? []).map((rawRoom) => {
     const room = normalizeRoom(rawRoom as RoomDb);
-    const s = stats.get(room.id);
     return {
       ...room,
-      member_count: Number(s?.member_count ?? 0),
-      message_count: Number(s?.message_count ?? 0),
-      last_message_at: s?.last_message_at ?? null,
+      member_count: 0,
+      message_count: 0,
+      last_message_at: null,
     };
   }) as RoomWithStats[];
 }
