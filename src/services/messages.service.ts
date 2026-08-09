@@ -79,11 +79,21 @@ export function triggerAIRoomReplies(input: { roomId: string; messageId: string;
   const key = `${input.roomId}:${input.messageId}`;
   if (scheduledAIByMessage.has(key)) return;
   scheduledAIByMessage.add(key);
+
   const base = new Date(input.createdAt).getTime();
   const firstDelay = 1500 + Math.floor(Math.random() * 1800);
   const secondDelay = 4200 + Math.floor(Math.random() * 2200);
-  void requestAIRoomReply(input.roomId, input.message, 1, base + firstDelay, input.onReply);
-  if (typeof window !== "undefined") window.setTimeout(() => void requestAIRoomReply(input.roomId, input.message, 2, Date.now(), input.onReply), secondDelay);
+
+  // Both replies are deliberately delayed so the AI feels conversational rather than instantaneous.
+  window.setTimeout(() => {
+    void requestAIRoomReply(input.roomId, input.message, 1, Date.now(), input.onReply);
+  }, firstDelay);
+
+  window.setTimeout(() => {
+    void requestAIRoomReply(input.roomId, input.message, 2, Date.now(), input.onReply);
+    // Bound this dedupe map so long-running sessions don't grow without limit.
+    scheduledAIByMessage.delete(key);
+  }, secondDelay);
 }
 
 export async function sendMessage(input: { roomId: string; userId: string; content: string; replyToId?: string | null; onAIReply?: AIReplyHandler }) {
