@@ -5,8 +5,20 @@
 .diwan-vip-card:hover { transform: translateY(-3px); box-shadow: 0 22px 60px -35px color-mix(in oklab, var(--primary) 65%, transparent); }
 .diwan-vip-card-featured { border-color: color-mix(in oklab, var(--primary) 52%, var(--border)); box-shadow: 0 20px 60px -38px color-mix(in oklab, var(--primary) 70%, transparent); }
 .diwan-vip-status { border-color: color-mix(in oklab, var(--success) 40%, var(--border)); }
-
-/* Premium-only hooks for chat/profile surfaces. These classes are inert until an active VIP state is rendered. */
 .diwan-vip-badge { box-shadow: 0 0 18px color-mix(in oklab, var(--primary) 45%, transparent); }
 .diwan-vip-surface { border-color: color-mix(in oklab, var(--primary) 35%, var(--border)); box-shadow: 0 16px 44px -30px color-mix(in oklab, var(--primary) 55%, transparent); }
 .diwan-vip-name { text-shadow: 0 0 18px color-mix(in oklab, var(--primary) 38%, transparent); }
+
+/* Chat header: one subtle role control beside the room name. */
+main:has(.glass-strong) > div.flex.gap-2 > .glass-strong > header { position: relative; }
+main:has(.glass-strong) > div.flex.gap-2 > .glass-strong > header button[aria-label="تعديل الرتب والصلاحيات"] { height: 32px; min-width: 58px; padding-inline: 9px; border-radius: 11px; border: 1px solid color-mix(in oklab, var(--primary) 24%, var(--border)); background: color-mix(in oklab, var(--primary) 7%, transparent); color: color-mix(in oklab, var(--primary) 82%, var(--foreground)); box-shadow: 0 4px 16px -12px color-mix(in oklab, var(--primary) 70%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: background 180ms ease, border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease; }
+main:has(.glass-strong) > div.flex.gap-2 > .glass-strong > header button[aria-label="تعديل الرتب والصلاحيات"]:hover, main:has(.glass-strong) > div.flex.gap-2 > .glass-strong > header button[aria-label="تعديل الرتب والصلاحيات"]:focus-visible { background: color-mix(in oklab, var(--primary) 13%, transparent); border-color: color-mix(in oklab, var(--primary) 42%, var(--border)); box-shadow: 0 7px 22px -12px color-mix(in oklab, var(--primary) 70%, transparent); transform: translateY(-1px); outline: none; }
+
+/* Members panel contains members only; role management stays in the chat header. */
+main:has(.glass-strong) > div.flex.gap-2 > div[class*="w-[250px]"] [aria-label="تعديل الرتب والصلاحيات"], main:has(.glass-strong) > div.flex.gap-2 > div.lg\:hidden [aria-label="تعديل الرتب والصلاحيات"], main:has(.glass-strong) aside.glass [aria-label="تعديل الرتب والصلاحيات"] { display: none !important; }
+main:has(.glass-strong) > div.flex.gap-2 > div[class*="w-[250px]"] header, main:has(.glass-strong) > div.flex.gap-2 > div.lg\:hidden header { min-height: 52px; background: color-mix(in oklab, var(--secondary) 34%, transparent); border-bottom-color: color-mix(in oklab, var(--border) 75%, transparent); }
+
+@media (max-width: 767px) {
+  main:has(.glass-strong) > div.flex.gap-2 > .glass-strong > header button[aria-label="تعديل الرتب والصلاحيات"] { height: 30px; min-width: 50px; padding-inline: 7px; border-radius: 10px; font-size: 9px; }
+  main:has(.glass-strong) > div.flex.gap-2 > .glass-strong > header button[aria-label="تعديل الرتب والصلاحيات"] svg { width: 14px; height: 14px; }
+}
