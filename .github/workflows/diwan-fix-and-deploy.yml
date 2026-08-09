@@ -1,0 +1,67 @@
+name: Diwan fix and deploy
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  fix-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply chat UI and role fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/pages/ChatPage.tsx')
+          s = p.read_text()
+          old = '''  const memberRoles = useQuery({\n    queryKey: ["chat-member-roles", roomId, memberIds.join(",")],\n    enabled: memberIds.length > 0,\n    queryFn: async () => {\n      const { data, error } = await supabase.from("user_roles").select("user_id,role").in("user_id", memberIds);\n      if (error) throw error;\n      return data ?? [];\n    },\n    staleTime: 30000,\n  });\n\n  const roleById = useMemo(() => {\n    const map = new Map<string, "admin" | "moderator">();\n    for (const row of memberRoles.data ?? []) {\n      if (row.role === "admin") map.set(row.user_id, "admin");\n      else if (row.role === "moderator" && !map.has(row.user_id)) map.set(row.user_id, "moderator");\n    }\n    return map;\n  }, [memberRoles.data]);'''
+          new = '''  const memberRoles = useQuery({\n    queryKey: ["chat-member-roles", roomId, memberIds.join(",")],\n    enabled: memberIds.length > 0,\n    queryFn: async () => {\n      const [{ data: global, error: globalError }, { data: roomRoles, error: roomError }] = await Promise.all([\n        supabase.from("user_roles").select("user_id,role").in("user_id", memberIds),\n        roomId ? supabase.from("room_members").select("user_id,role").eq("room_id", roomId).in("user_id", memberIds) : Promise.resolve({ data: [], error: null } as any),\n      ]);\n      if (globalError) throw globalError;\n      if (roomError) throw roomError;\n      return { global: global ?? [], room: roomRoles ?? [] };\n    },\n    staleTime: 30000,\n  });\n\n  const roleById = useMemo(() => {\n    const map = new Map<string, "admin" | "moderator">();\n    for (const row of memberRoles.data?.room ?? []) {\n      if (row.role === "owner") map.set(row.user_id, "admin");\n      else if (row.role === "moderator") map.set(row.user_id, "moderator");\n    }\n    for (const row of memberRoles.data?.global ?? []) {\n      if (row.role === "admin") map.set(row.user_id, "admin");\n      else if (row.role === "moderator" && !map.has(row.user_id)) map.set(row.user_id, "moderator");\n    }\n    if (room.data?.owner_id) map.set(room.data.owner_id, "admin");\n    return map;\n  }, [memberRoles.data, room.data?.owner_id]);'''
+          if old not in s: raise SystemExit('ChatPage role block not found')
+          s = s.replace(old, new)
+          old = '''    <div className="flex min-h-0 h-[calc(100dvh-135px)] translate-y-1 gap-2 overflow-hidden lg:h-[calc(100dvh-175px)] lg:translate-y-0 lg:gap-3">'''
+          new = '''    <div className="flex min-h-0 h-[calc(100dvh-205px)] gap-2 overflow-hidden pb-[env(safe-area-inset-bottom)] sm:h-[calc(100dvh-170px)] lg:h-[calc(100dvh-175px)] lg:gap-3">'''
+          if old not in s: raise SystemExit('ChatPage height block not found')
+          s = s.replace(old, new)
+          old = '''              <Button type="button" size="sm" variant="outline" className="hidden h-9 shrink-0 gap-1.5 rounded-xl text-xs sm:inline-flex" onClick={() => setRolesOpen(true)>\n                <ShieldCheck className="size-4" />تعديل الرتب والصلاحيات\n              </Button>'''
+          if old not in s:
+            old = '''              <Button type="button" size="sm" variant="outline" className="hidden h-9 shrink-0 gap-1.5 rounded-xl text-xs sm:inline-flex" onClick={() => setRolesOpen(true)}>\n                <ShieldCheck className="size-4" />تعديل الرتب والصلاحيات\n              </Button>\n              <DropdownMenu>\n                <DropdownMenuTrigger asChild>\n                  <Button type="button" size="icon" variant="outline" className="size-9 shrink-0 rounded-xl sm:hidden" aria-label="إدارة الغرفة"><Settings2 className="size-4" /></Button>\n                </DropdownMenuTrigger>\n                <DropdownMenuContent align="end" className="min-w-56">\n                  <DropdownMenuItem onClick={() => setRolesOpen(true)}><ShieldCheck className="size-4" />تعديل الرتب والصلاحيات</DropdownMenuItem>\n                </DropdownMenuContent>\n              </DropdownMenu>'''
+          new = '''              <Button type="button" size="sm" variant="outline" className="h-9 shrink-0 gap-1.5 rounded-xl px-2 text-[10px] font-black sm:px-3 sm:text-xs" onClick={() => setRolesOpen(true)} aria-label="تعديل الرتب والصلاحيات">\n                <ShieldCheck className="size-4" /> <span>الرتب</span><span className="hidden sm:inline"> والصلاحيات</span>\n              </Button>'''
+          if old not in s: raise SystemExit('ChatPage role button block not found')
+          s = s.replace(old, new)
+          old = '''          <form className="shrink-0 border-t bg-background/50 p-2.5 sm:p-3" onSubmit={(event) => { event.preventDefault(); submit(); }}>'''
+          new = '''          <form className="shrink-0 border-t bg-background/50 p-2 sm:p-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))]" onSubmit={(event) => { event.preventDefault(); submit(); }}>'''
+          if old not in s: raise SystemExit('ChatPage composer block not found')
+          s = s.replace(old, new)
+          p.write_text(s)
+
+          p = Path('src/components/chat/MembersPanel.tsx')
+          s = p.read_text()
+          old = '''      {canManageRoles && roomId ? <Button type="button" variant="ghost" size="sm" className="ms-auto h-8 shrink-0 gap-1.5 rounded-lg px-2 text-[10px] font-bold sm:text-xs" onClick={() => setRoleDialogOpen(true)} aria-label="تعديل الرتب والصلاحيات"><Settings2 className="size-3.5" /> <span className="hidden xs:inline sm:inline">الرتب</span></Button> : null}'''
+          new = '''      {canManageRoles && roomId ? <Button type="button" variant="outline" size="sm" className="ms-auto h-8 shrink-0 gap-1.5 rounded-lg border-primary/30 bg-primary/5 px-2 text-[10px] font-black text-primary sm:text-xs" onClick={() => setRoleDialogOpen(true)} aria-label="تعديل الرتب والصلاحيات"><Settings2 className="size-3.5" /> الرتب</Button> : null}'''
+          if old not in s: raise SystemExit('MembersPanel role button block not found')
+          s = s.replace(old, new)
+          p.write_text(s)
+          PY
+      - name: Typecheck and build
+        run: |
+          npm ci
+          npm run build
+      - name: Commit fixes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/pages/ChatPage.tsx src/components/chat/MembersPanel.tsx
+          git diff --cached --quiet || git commit -m 'Fix mobile chat layout and admin role display [skip ci]'
+          git push
+      - name: Deploy production to Vercel when token is configured
+        if: ${{ secrets.VERCEL_TOKEN != '' }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: team_Z2PJn5pKpM3jNESuedpMpB8v
+          VERCEL_PROJECT_ID: prj_ouB0XzaiZFfPLs3KKQirgOHpDfZS
+        run: |
+          npx vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          npx vercel build --prod --token="$VERCEL_TOKEN"
+          npx vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
