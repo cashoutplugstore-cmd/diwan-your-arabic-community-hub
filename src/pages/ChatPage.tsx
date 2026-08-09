@@ -26,6 +26,7 @@ import { blockUser, myBlocksQuery, restrictInRoom, roomRestrictionsQuery } from 
 import { roomMembersQuery, roomQuery, roomsWithStatsQuery } from "@/services/rooms.service";
 import { EMPTY_PERMISSIONS, roomPermissionsQuery } from "@/services/room-roles.service";
 import { RoomRolesDialog } from "@/components/chat/RoomRolesDialog";
+import { buildDemoAmbientMessage } from "@/lib/demo-activity";
 import type { Message, MessageWithAuthor, Profile } from "@/types";
 
 const SEND_COOLDOWN_MS = 1200;
@@ -75,6 +76,7 @@ export function ChatRoomPage({ slug }: { slug: string }) {
   const [atBottom, setAtBottom] = useState(true);
   const [rolesOpen, setRolesOpen] = useState(false);
   const [unseen, setUnseen] = useState(0);
+  const [demoMessages, setDemoMessages] = useState<MessageWithAuthor[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastSentAt = useRef(0);
@@ -131,18 +133,35 @@ export function ChatRoomPage({ slug }: { slug: string }) {
   const permissionsQuery = useQuery(roomPermissionsQuery(roomId, user?.id));
   const permissions = permissionsQuery.data ?? EMPTY_PERMISSIONS;
   const canModerate = permissions.canModerate || !!roles.data?.isAdmin || !!roles.data?.isModerator || room.data?.owner_id === user?.id;
-  const canManageRoles = permissions.canManageRoles || !!roles.data?.isAdmin || room.data?.owner_id === user?.id;
+  const canManageRoles = permissions.canManageRoles || !!roles.data?.isAdmin || roleById.get(user?.id ?? "") === "admin" || room.data?.owner_id === user?.id;
 
   const items = useMemo(() => {
     const flat = [...(messages.data?.pages ?? [])].reverse().flat();
+    const combined = [...flat, ...demoMessages].sort((a, b) => a.created_at.localeCompare(b.created_at));
     const seen = new Set<string>();
-    return flat.filter((message) => {
+    return combined.filter((message) => {
       if (seen.has(message.id)) return false;
       seen.add(message.id);
-      return !blockedIds.has(message.user_id);
+      return !blockedIds.has(message.user_id) && !message.is_deleted;
     });
-  }, [messages.data, blockedIds]);
+  }, [messages.data, blockedIds, demoMessages]);
   const byId = useMemo(() => new Map(items.map((m) => [m.id, m])), [items]);
+
+  useEffect(() => {
+    if (!roomId) { setDemoMessages([]); return; }
+    const addDemo = () => {
+      if (document.visibilityState === "hidden") return;
+      const demo = buildDemoAmbientMessage(roomId);
+      if (!demo) return;
+      setDemoMessages((current) => {
+        if (current.some((item) => item.id === demo.id) || items.some((item) => item.id === demo.id)) return current;
+        return [...current, demo].slice(-8);
+      });
+    };
+    addDemo();
+    const timer = window.setInterval(addDemo, 18000);
+    return () => window.clearInterval(timer);
+  }, [roomId]);
 
   const appendIncoming = useCallback(async (message: Message) => {
     if (!roomId) return;
@@ -166,7 +185,10 @@ export function ChatRoomPage({ slug }: { slug: string }) {
 
   useRealtimeMessages(roomId, {
     onInsert: (message) => void appendIncoming(message),
-    onChange: (message) => qc.setQueryData<any>(["messages", roomId], (prev: any) => prev ? { ...prev, pages: prev.pages.map((p: any) => p.map((x: any) => x.id === message.id ? { ...x, ...message } : x)) } : prev),
+    onChange: (message) => {
+      if (message.is_deleted) setDemoMessages((current) => current.filter((item) => item.id !== message.id));
+      qc.setQueryData<any>(["messages", roomId], (prev: any) => prev ? { ...prev, pages: prev.pages.map((p: any) => p.map((x: any) => x.id === message.id ? { ...x, ...message } : x)) } : prev);
+    },
   });
 
   useEffect(() => {
@@ -240,7 +262,7 @@ export function ChatRoomPage({ slug }: { slug: string }) {
   if (!room.data) return <EmptyState icon={MessagesSquare} title={t.common.empty} description={t.common.error} />;
 
   return (
-    <div className="flex min-h-0 h-[calc(100dvh-175px)] gap-2 overflow-hidden lg:gap-3">
+    <div className="flex min-h-0 h-[calc(100dvh-135px)] translate-y-1 gap-2 overflow-hidden lg:h-[calc(100dvh-175px)] lg:translate-y-0 lg:gap-3">
       <aside className="glass hidden w-[220px] shrink-0 flex-col overflow-hidden rounded-2xl lg:flex">
         <div className="flex items-center gap-2 border-b px-3 py-3">
           <Hash className="size-4 text-primary" />
@@ -318,8 +340,8 @@ export function ChatRoomPage({ slug }: { slug: string }) {
                     <div className={`min-w-0 max-w-[86%] sm:max-w-[72%] ${mine ? "items-end" : "items-start"}`}>
                       <div className={`rounded-2xl px-3.5 py-2 ${mine ? "rounded-te-md" : "rounded-ts-md"} ${bubble}`}>
                         <div className="mb-0.5 flex flex-wrap items-center gap-1.5">
-                          <p className={admin ? "text-[10px] font-black text-rose-300" : mod ? "text-[10px] font-bold text-sky-300" : "text-[10px] font-semibold opacity-70"}>{admin ? "🌹 👑 " : ""}{name}</p>
-                          {admin ? <span className="rounded-full border border-rose-400/40 px-1.5 py-0.5 text-[7px] font-black text-rose-300">ADMIN</span> : mod ? <span className="rounded-full border border-sky-400/40 px-1.5 py-0.5 text-[7px] font-black text-sky-300">MOD</span> : null}
+                          {admin ? <span className="rounded-full border border-rose-400/40 bg-rose-500/10 px-1.5 py-0.5 text-[7px] font-black text-rose-300">ADMIN</span> : mod ? <span className="rounded-full border border-sky-400/40 bg-sky-500/10 px-1.5 py-0.5 text-[7px] font-black text-sky-300">MOD</span> : null}
+                          <p className={admin ? "text-[10px] font-black text-rose-300" : mod ? "text-[10px] font-bold text-sky-300" : "text-[10px] font-semibold opacity-70"}>{admin ? "👑 " : ""}{name}</p>
                         </div>
                         {parent ? <p className="mb-1.5 truncate rounded-lg border-s-2 border-current/25 ps-2 text-[10px] opacity-65">{parent.author?.display_name || parent.author?.username}: {parent.content}</p> : null}
                         <p className="whitespace-pre-wrap break-words text-[13px] leading-5 sm:text-sm">{highlight(message.content)}</p>

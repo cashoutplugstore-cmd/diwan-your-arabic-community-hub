@@ -9,7 +9,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <Navbar />
       <div className="mx-auto flex w-full max-w-[1600px]">
         <Sidebar />
-        <main className="min-w-0 flex-1 px-3 pb-24 pt-5 sm:px-4 lg:px-6 lg:pb-10">{children}</main>
+        <main className="min-w-0 flex-1 px-3 pb-20 pt-5 sm:px-4 lg:px-6 lg:pb-10">{children}</main>
       </div>
       <MobileNav />
     </div>
