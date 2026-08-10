@@ -2,7 +2,6 @@ import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { buildDemoAmbientMessage } from "@/lib/demo-activity";
-import { triggerAIRoomReplies } from "@/services/messages.service";
 import type { Message } from "@/types";
 
 type Handlers = {
@@ -14,9 +13,10 @@ type Handlers = {
  * Realtime room messages plus a lightweight synthetic UI activity layer.
  * Synthetic activity is never inserted into Supabase.
  *
- * Own INSERT events are ignored because the chat page already adds an
- * optimistic copy and invalidates the query after the send succeeds. This
- * prevents the Realtime echo from rendering the same message twice.
+ * AI replies are scheduled by sendMessage for messages created by the
+ * current user. Realtime only delivers the persisted message to other
+ * clients, so it must never schedule AI replies itself; doing both caused
+ * duplicate AI conversations.
  */
 export function useRealtimeMessages(roomId: string | undefined, handlers: Handlers = {}) {
   const queryClient = useQueryClient();
@@ -50,21 +50,12 @@ export function useRealtimeMessages(roomId: string | undefined, handlers: Handle
         (payload) => {
           const message = payload.new as Message;
 
-          // Do not append our own Realtime echo. The optimistic row is replaced
-          // by the normal React Query invalidation in the send mutation.
+          // The sender already has an optimistic row and invalidates its
+          // query after success. Ignore the own Realtime echo to avoid a
+          // second visual insert.
           if (currentUserId && message.user_id === currentUserId) return;
 
           handlersRef.current.onInsert?.(message);
-
-          if (!String(message.user_id).startsWith("demo-")) {
-            triggerAIRoomReplies({
-              roomId,
-              messageId: message.id,
-              message: message.content,
-              createdAt: message.created_at,
-              onReply: (reply) => handlersRef.current.onInsert?.(reply as Message),
-            });
-          }
         },
       )
       .on(
@@ -75,7 +66,7 @@ export function useRealtimeMessages(roomId: string | undefined, handlers: Handle
       .on(
         "postgres_changes",
         { event: "DELETE", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` },
-        () => queryClient.invalidateQueries({ queryKey: ["messages", roomId] }),
+        () => void queryClient.invalidateQueries({ queryKey: ["messages", roomId] }),
       )
       .subscribe();
 
