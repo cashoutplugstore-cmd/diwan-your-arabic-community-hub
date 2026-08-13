@@ -45,3 +45,7 @@ with check (
   and provider_customer_id is null
   and provider_subscription_id is null
 );
+
+-- Staff synchronization is internal only; never expose this SECURITY DEFINER RPC to clients.
+revoke execute on function public.sync_staff_room_memberships() from public, anon, authenticated;
+grant execute on function public.sync_staff_room_memberships() to service_role;
