@@ -15,15 +15,22 @@ Deno.serve(async (req: Request) => {
     const auth = req.headers.get("Authorization");
     if (!auth?.startsWith("Bearer ")) return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: corsHeaders });
 
-    const { roomId, roomName, message, language = "ar", recentMessages = [] } = await req.json();
+    const { roomId, roomName, message, language = "ar", recentMessages = [], persona = "friendly" } = await req.json();
     if (!roomId || !message) return new Response(JSON.stringify({ error: "roomId and message are required" }), { status: 400, headers: corsHeaders });
 
     const apiKey = Deno.env.get("OPENAI_API_KEY");
     if (!apiKey) return new Response(JSON.stringify({ error: "OPENAI_API_KEY is not configured" }), { status: 503, headers: corsHeaders });
 
     const context = Array.isArray(recentMessages)
-      ? recentMessages.slice(-8).map((m: { author?: string; content?: string }) => `${m.author ?? "عضو"}: ${(m.content ?? "").slice(0, 500)}`).join("\n")
+      ? recentMessages.slice(-12).map((m: { author?: string; content?: string }) => `${m.author ?? "عضو"}: ${(m.content ?? "").slice(0, 500)}`).join("\n")
       : "";
+
+    const personaPrompt = {
+      friendly: "شخصية اجتماعية وخفيفة، تحب فتح السوالف وتسأل سؤالاً بسيطاً عند مناسبة ذلك.",
+      funny: "شخصية مرحة، تستخدم مزحة خفيفة أحياناً بدون مبالغة أو إزعاج.",
+      curious: "شخصية فضولية، تهتم بتفاصيل كلام الأعضاء وتسأل أسئلة متابعة قصيرة.",
+      calm: "شخصية هادئة وودودة، تعطي ردوداً مختصرة وتدخل في النقاش عندما يكون عندها شيء مفيد.",
+    }[persona as string] ?? "شخصية اجتماعية وخفيفة.";
 
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -31,10 +38,11 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify({
         model: "gpt-5-mini",
         input: [
-          { role: "system", content: [{ type: "input_text", text: `أنت "ديوان AI"، مساعد آلي معلن بوضوح داخل مجتمع ديوان. لا تنتحل شخصية إنسان ولا تدّعي أنك مستخدم حقيقي. الغرفة: ${roomName ?? roomId}. تحدث باللهجة العراقية الخفيفة، بأسلوب اجتماعي ودود، قصير وطبيعي. لا تكرر الكلام. إذا كان السياق يسمح، اسأل سؤالاً بسيطاً أو افتح موضوعاً جديداً حتى تستمر المحادثة. لا تستخدم محتوى جنسي أو عنيف أو خطير. اللغة: ${language}. السياق الأخير:\n${context}` }] },
+          { role: "system", content: [{ type: "input_text", text: `أنت "ديوان AI"، شخصية افتراضية معلنة داخل مجتمع ديوان. لا تنتحل شخصية إنسان ولا تدّعي أنك مستخدم بشري. الغرفة: ${roomName ?? roomId}. ${personaPrompt} تحدث باللهجة العراقية الخفيفة وبأسلوب محادثة طبيعي: غالباً جملة أو جملتان، وتجنب الإجابات الرسمية الطويلة. لا تكرر نفس الفكرة أو الصياغة. لا توافق دائماً؛ شارك رأياً بسيطاً عندما يناسب السياق. تابع تفاصيل آخر الرسائل، وأحياناً ارجع لنقطة سابقة حتى يبدو الحوار متماسكاً. إذا انتهى الموضوع، افتح سؤالاً خفيفاً أو موضوعاً قريباً، لكن لا تسأل في كل رد. لا ترسل أكثر من سؤال واحد في الرد. لا تستخدم محتوى جنسي أو عنيف أو خطير. اللغة: ${language}. السياق الأخير:\n${context}` }] },
           { role: "user", content: [{ type: "input_text", text: message.slice(0, 2000) }] },
         ],
         max_output_tokens: 180,
+        temperature: 0.9,
       }),
     });
 
