@@ -25,7 +25,18 @@ export function UserAvatar({ name, src, size = "md", status, role, className, sh
   const premium = useQuery({ queryKey: ["avatar-premium", user?.id], enabled: autoCurrentRole && Boolean(user?.id), staleTime: 60000, queryFn: async () => { if (!user?.id) return false; const { data } = await looseDb.from("premium_subscriptions").select("status,expires_at").eq("user_id", user.id).eq("status", "active").limit(1); const row = (data as any[] | null)?.[0]; return Boolean(row && (!row.expires_at || new Date(row.expires_at).getTime() > Date.now())); } });
   const publicStaff = useQuery({ queryKey: ["public-avatar-staff"], enabled: Boolean(name && !role), staleTime: 30000, queryFn: async () => { const [{ data: profiles, error: profilesError }, { data: roles, error: rolesError }] = await Promise.all([supabase.from("profiles").select("id,username,display_name,avatar_url"), supabase.from("user_roles").select("user_id,role")]); if (profilesError) throw profilesError; if (rolesError) throw rolesError; return { profiles: (profiles ?? []) as PublicProfile[], roles: (roles ?? []) as PublicRole[] }; } });
   const bot = name ? aiMembers.find((member) => member.name === name || member.id === name) : undefined;
-  const matchedPublicProfile = (() => { if (!name || role || !publicStaff.data) return null; const byAvatar = src ? publicStaff.data.profiles.filter((p) => p.avatar_url === src) : []; if (byAvatar.length === 1) return byAvatar[0]; const candidates = publicStaff.data.profiles.filter((p) => p.username === name || p.display_name === name); return candidates.length === 1 ? candidates[0] : null; })();
+  const matchedPublicProfile = (() => {
+    if (!name || role || !publicStaff.data) return null;
+    const byName = publicStaff.data.profiles.filter((p) => p.username === name || p.display_name === name);
+    if (byName.length === 1) return byName[0];
+    if (src) {
+      const byAvatar = publicStaff.data.profiles.filter((p) => p.avatar_url === src);
+      if (byAvatar.length === 1) return byAvatar[0];
+      const avatarAndName = byAvatar.filter((p) => p.username === name || p.display_name === name);
+      if (avatarAndName.length === 1) return avatarAndName[0];
+    }
+    return null;
+  })();
   const publicRole = matchedPublicProfile ? (publicStaff.data?.roles.some((r) => r.user_id === matchedPublicProfile.id && r.role === "admin") ? "admin" : publicStaff.data?.roles.some((r) => r.user_id === matchedPublicProfile.id && r.role === "moderator") ? "moderator" : null) : null;
   const profileTarget = bot?.id ?? matchedPublicProfile?.id ?? null;
   const currentName = profile.data?.display_name || profile.data?.username || user?.email?.split("@")[0] || "";
