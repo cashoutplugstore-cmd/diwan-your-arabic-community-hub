@@ -19,13 +19,25 @@ export async function fetchRoomsWithStats(): Promise<RoomWithStats[]> {
     supabase.from("demo_room_members").select("room_id,demo_user_id").in("room_id", ids),
     supabase.from("messages").select("room_id,created_at").in("room_id", ids).eq("is_deleted", false),
   ]);
-  const memberCounts = new Map<string, number>();
-  for (const row of members ?? []) memberCounts.set(row.room_id, (memberCounts.get(row.room_id) ?? 0) + 1);
-  for (const row of demoMembers ?? []) memberCounts.set(row.room_id, (memberCounts.get(row.room_id) ?? 0) + 1);
+  // Count unique identities per room. This prevents duplicate membership rows
+  // from making different rooms look artificially identical or inflated.
+  const memberSets = new Map<string, Set<string>>();
+  for (const row of members ?? []) {
+    if (!row.room_id || !row.user_id) continue;
+    const set = memberSets.get(row.room_id) ?? new Set<string>();
+    set.add(row.user_id);
+    memberSets.set(row.room_id, set);
+  }
+  for (const row of demoMembers ?? []) {
+    if (!row.room_id || !row.demo_user_id) continue;
+    const set = memberSets.get(row.room_id) ?? new Set<string>();
+    set.add(`demo:${row.demo_user_id}`);
+    memberSets.set(row.room_id, set);
+  }
   const messageCounts = new Map<string, number>();
   const lastMessages = new Map<string, string>();
   for (const row of messages ?? []) { messageCounts.set(row.room_id, (messageCounts.get(row.room_id) ?? 0) + 1); const current = lastMessages.get(row.room_id); if (!current || new Date(row.created_at).getTime() > new Date(current).getTime()) lastMessages.set(row.room_id, row.created_at); }
-  return rooms.map((rawRoom) => { const room = normalizeRoom(rawRoom as RoomDb); return { ...room, member_count: memberCounts.get(room.id) ?? 0, message_count: messageCounts.get(room.id) ?? 0, last_message_at: lastMessages.get(room.id) ?? null } as RoomWithStats; });
+  return rooms.map((rawRoom) => { const room = normalizeRoom(rawRoom as RoomDb); return { ...room, member_count: memberSets.get(room.id)?.size ?? 0, message_count: messageCounts.get(room.id) ?? 0, last_message_at: lastMessages.get(room.id) ?? null } as RoomWithStats; });
 }
 export function buildCommunityTree(rooms: RoomWithStats[]): RegionNode[] { const scoped = rooms.filter((r) => !r.is_private); if (scoped.length === 0) return []; const byCountry = new Map<string, CountryNode>(); for (const room of scoped) { const country = (room as CommunityRoom).country ?? "غير مصنفة"; const node = byCountry.get(country) ?? { country, cities: [], member_count: 0, message_count: 0 }; node.cities.push(room); node.member_count += room.member_count; node.message_count += room.message_count; byCountry.set(country, node); } const countries = [...byCountry.values()].sort((a, b) => b.message_count - a.message_count || a.country.localeCompare(b.country, "ar")); return [{ region: "arab", countries, room_count: scoped.length, member_count: countries.reduce((sum, c) => sum + c.member_count, 0) }]; }
 export async function fetchRoomMembers(roomId: string): Promise<Profile[]> { const { data: room, error: roomError } = await supabase.from("rooms").select("owner_id").eq("id", roomId).maybeSingle(); if (roomError) throw roomError; const { data: members, error: membersError } = await supabase.from("room_members").select("user_id").eq("room_id", roomId).limit(200); if (membersError) throw membersError; const { data: staff, error: staffError } = await supabase.from("user_roles").select("user_id,role").in("role", ["admin", "moderator"]); if (staffError) throw staffError; const ids = new Set<string>(); for (const row of members ?? []) if (row.user_id) ids.add(row.user_id); if (room?.owner_id) ids.add(room.owner_id); for (const row of staff ?? []) if (row.user_id) ids.add(row.user_id); if (ids.size === 0) return []; const { data: profiles, error: profilesError } = await supabase.from("profiles").select("*").in("id", [...ids]); if (profilesError) throw profilesError; return profiles ?? []; }
