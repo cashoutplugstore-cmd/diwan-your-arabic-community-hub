@@ -52,7 +52,7 @@ function uniqueAIContent(roomId: string, candidate: string, salt: number, source
 }
 
 function fallbackReply(author: Profile, roomId: string, source: string, salt: number, createdAt: number, member: typeof aiMembers[number]): MessageWithAuthor {
-  const generated = buildAiConversation(member, recentAIContent.get(roomId) ?? []).text;
+  const generated = buildAiConversation(member, recentAIContent.get(roomId) ?? []).text ?? "";
   const content = uniqueAIContent(roomId, generated, salt, source);
   return { id: `ai-fallback-${roomId}-${createdAt}-${salt}`, room_id: roomId, user_id: author.id, content, created_at: new Date(createdAt).toISOString(), reply_to_id: null, edited_at: null, is_deleted: false, author };
 }
@@ -80,18 +80,16 @@ export function triggerAIRoomReplies(input: { roomId: string; messageId: string;
   if (scheduledAIByMessage.has(key)) return;
   scheduledAIByMessage.add(key);
 
-  const base = new Date(input.createdAt).getTime();
   const firstDelay = 1500 + Math.floor(Math.random() * 1800);
   const secondDelay = 4200 + Math.floor(Math.random() * 2200);
+  const onReply = input.onReply;
 
-  // Both replies are deliberately delayed so the AI feels conversational rather than instantaneous.
   window.setTimeout(() => {
-    void requestAIRoomReply(input.roomId, input.message, 1, Date.now(), input.onReply);
+    void requestAIRoomReply(input.roomId, input.message, 1, Date.now(), onReply);
   }, firstDelay);
 
   window.setTimeout(() => {
-    void requestAIRoomReply(input.roomId, input.message, 2, Date.now(), input.onReply);
-    // Bound this dedupe map so long-running sessions don't grow without limit.
+    void requestAIRoomReply(input.roomId, input.message, 2, Date.now(), onReply);
     scheduledAIByMessage.delete(key);
   }, secondDelay);
 }
@@ -103,7 +101,8 @@ export async function sendMessage(input: { roomId: string; userId: string; conte
   const { data, error } = await supabase.from("messages").insert({ room_id: input.roomId, user_id: input.userId, content, reply_to_id: input.replyToId ?? null }).select("id,created_at").single();
   if (error) throw error;
   if (typeof window !== "undefined") window.localStorage.setItem(`diwan:last-real-message:${input.roomId}`, String(Date.now()));
-  triggerAIRoomReplies({ roomId: input.roomId, messageId: data?.id ?? `${input.userId}:${clientCreatedAt}`, message: content, createdAt: data?.created_at ?? clientCreatedAt, onReply: input.onAIReply });
+  const replyInput = { roomId: input.roomId, messageId: data?.id ?? `${input.userId}:${clientCreatedAt}`, message: content, createdAt: data?.created_at ?? clientCreatedAt };
+  if (input.onAIReply) triggerAIRoomReplies({ ...replyInput, onReply: input.onAIReply });
 }
 
 export async function editMessage(id: string, content: string) { const { error } = await supabase.from("messages").update({ content: content.trim().slice(0, MAX_MESSAGE_LENGTH), edited_at: new Date().toISOString() }).eq("id", id); if (error) throw error; }
