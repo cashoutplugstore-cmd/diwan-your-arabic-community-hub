@@ -23,10 +23,12 @@ export function UserAvatar({ name, src, size = "md", status, role, className, sh
   const profile = useQuery({ ...profileQuery(user?.id), enabled: autoCurrentRole && Boolean(user?.id) });
   const currentRoles = useQuery({ ...myRolesQuery(user?.id), enabled: autoCurrentRole && Boolean(user?.id) });
   const premium = useQuery({ queryKey: ["avatar-premium", user?.id], enabled: autoCurrentRole && Boolean(user?.id), staleTime: 60000, queryFn: async () => { if (!user?.id) return false; const { data } = await looseDb.from("premium_subscriptions").select("status,expires_at").eq("user_id", user.id).eq("status", "active").limit(1); const row = (data as any[] | null)?.[0]; return Boolean(row && (!row.expires_at || new Date(row.expires_at).getTime() > Date.now())); } });
-  const publicStaff = useQuery({ queryKey: ["public-avatar-staff"], enabled: Boolean(name && !role), staleTime: 30000, queryFn: async () => { const [{ data: profiles, error: profilesError }, { data: roles, error: rolesError }] = await Promise.all([supabase.from("profiles").select("id,username,display_name,avatar_url"), supabase.from("user_roles").select("user_id,role")]); if (profilesError) throw profilesError; if (rolesError) throw rolesError; return { profiles: (profiles ?? []) as PublicProfile[], roles: (roles ?? []) as PublicRole[] }; } });
+  // Identity lookup must remain enabled even when the displayed member has a role.
+  // Otherwise admin/mod avatars had no target and could fall through to the viewer.
+  const publicStaff = useQuery({ queryKey: ["public-avatar-staff"], enabled: Boolean(name), staleTime: 30000, queryFn: async () => { const [{ data: profiles, error: profilesError }, { data: roles, error: rolesError }] = await Promise.all([supabase.from("profiles").select("id,username,display_name,avatar_url"), supabase.from("user_roles").select("user_id,role")]); if (profilesError) throw profilesError; if (rolesError) throw rolesError; return { profiles: (profiles ?? []) as PublicProfile[], roles: (roles ?? []) as PublicRole[] }; } });
   const bot = name ? aiMembers.find((member) => member.name === name || member.id === name) : undefined;
   const matchedPublicProfile = (() => {
-    if (!name || role || !publicStaff.data) return null;
+    if (!name || !publicStaff.data) return null;
     const byName = publicStaff.data.profiles.filter((p) => p.username === name || p.display_name === name);
     if (byName.length === 1) return byName[0];
     if (src) {
