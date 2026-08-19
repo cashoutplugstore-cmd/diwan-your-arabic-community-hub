@@ -17,8 +17,8 @@ const registerSchema = loginSchema.extend({ username: z.string().min(3).max(24).
 type Mode = "login" | "register";
 
 const getAuthRedirectUrl = () => {
-  if (typeof window === "undefined") return import.meta.env.VITE_SITE_URL || "/";
-  const configuredUrl = import.meta.env.VITE_SITE_URL?.trim();
+  if (typeof window === "undefined") return import.meta.env["VITE_SITE_URL"] || "/";
+  const configuredUrl = import.meta.env["VITE_SITE_URL"]?.trim();
   if (configuredUrl) return `${configuredUrl.replace(/\/$/, "")}/`;
   return `${window.location.origin.replace(/\/$/, "")}/`;
 };

@@ -37,7 +37,7 @@ function aiAuthor(roomId: string, salt = 0) {
   const member = aiMembers[(cursor + salt) % aiMembers.length]!;
   memberCursor.set(roomId, cursor + 1);
   const fallback = authorFor(roomId, cursor + salt);
-  return { member, author: { ...fallback, display_name: member.name, username: member.name.toLowerCase() } as Profile };
+  return { member, author: { ...fallback, id: fallback.id ?? `demo-${roomId}-${cursor + salt}`, display_name: member.name, username: member.name.toLowerCase() } as Profile };
 }
 
 export function getActiveDemoMembers(limit = 48): Profile[] {
@@ -67,7 +67,7 @@ export function buildDemoAmbientMessage(roomId: string): MessageWithAuthor | nul
   window.localStorage.setItem(`diwan:last-ai-message:${roomId}`, String(now));
   const { member, author } = aiAuthor(roomId, Math.floor(realAt / 1000));
   const previous = JSON.parse(window.localStorage.getItem(`diwan:ai-context:${roomId}`) || "[]") as string[];
-  const pool = roomPools[roomKey(roomId)] ?? roomPools.general!;
+  const pool = roomPools[roomKey(roomId)] ?? roomPools["general"]!;
   const text = buildAiConversation(member, [...previous, pool[Math.floor(Math.random() * pool.length)]!]).text;
   const context = [...previous, text].slice(-6);
   window.localStorage.setItem(`diwan:ai-context:${roomId}`, JSON.stringify(context));

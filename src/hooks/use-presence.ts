@@ -39,7 +39,7 @@ export function useRoomPresence(roomId: string | undefined, me: { userId: string
       const state = channel.presenceState<PresenceEntry>();
       const flat = Object.values(state)
         .flatMap((list) => list)
-        .filter((entry): entry is PresenceEntry => Boolean(entry?.userId));
+        .filter((entry) => Boolean(entry?.userId));
 
       // A user can have multiple presence refs (tabs/devices). Keep the newest
       // entry per user so the member list never shows duplicate real users.
