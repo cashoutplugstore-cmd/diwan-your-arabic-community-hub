@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Diwan",
+    "slug": "diwan",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "diwan",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "plugins": ["expo-router", "expo-secure-store"],
+    "android": {
+      "package": "com.diwan.community",
+      "adaptiveIcon": {
+        "backgroundColor": "#111827"
+      }
+    }
+  }
+}
