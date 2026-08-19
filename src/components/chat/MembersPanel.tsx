@@ -68,7 +68,7 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
   const rows = useMemo<Row[]>(() => {
     const realRows = members.map((member) => {
       const p = presenceById.get(member.id);
-      return { id: member.id, name: member.display_name || member.username || "—", avatar: member.avatar_url, status: (p?.status === "online" || p?.status === "away" || p?.status === "offline") ? p.status : "offline", role: speakerById.has(member.id) ? "speaker" : (roleById.get(member.id) ?? "member"), speaking: speakerById.has(member.id), demo: false };
+      return { id: member.id, name: member.display_name || member.username || "—", avatar: member.avatar_url, status: (p?.status === "online" || p?.status === "away" || p?.status === "offline" ? p.status : "offline") as Row["status"], role: speakerById.has(member.id) ? "speaker" : (roleById.get(member.id) ?? "member"), speaking: speakerById.has(member.id), demo: false };
     });
     const realIds = new Set(realRows.map((row) => row.id));
     const demoRows = demoMembers.filter((member) => !realIds.has(member.id)).map((member, index) => ({ id: member.id, name: member.display_name || member.username || "عضو", avatar: member.avatar_url, status: "online" as const, role: index === 2 || index === 9 ? "vip" as const : "member" as const, speaking: false, demo: true }));
