@@ -14,12 +14,14 @@ export async function fetchRoomsWithStats(): Promise<RoomWithStats[]> {
   const rooms = data ?? [];
   if (!rooms.length) return [];
   const ids = rooms.map((room) => room.id);
-  const [{ data: members }, { data: messages }] = await Promise.all([
+  const [{ data: members }, { data: demoMembers }, { data: messages }] = await Promise.all([
     supabase.from("room_members").select("room_id,user_id").in("room_id", ids),
+    supabase.from("demo_room_members").select("room_id,demo_user_id").in("room_id", ids),
     supabase.from("messages").select("room_id,created_at").in("room_id", ids).eq("is_deleted", false),
   ]);
   const memberCounts = new Map<string, number>();
   for (const row of members ?? []) memberCounts.set(row.room_id, (memberCounts.get(row.room_id) ?? 0) + 1);
+  for (const row of demoMembers ?? []) memberCounts.set(row.room_id, (memberCounts.get(row.room_id) ?? 0) + 1);
   const messageCounts = new Map<string, number>();
   const lastMessages = new Map<string, string>();
   for (const row of messages ?? []) { messageCounts.set(row.room_id, (messageCounts.get(row.room_id) ?? 0) + 1); const current = lastMessages.get(row.room_id); if (!current || new Date(row.created_at).getTime() > new Date(current).getTime()) lastMessages.set(row.room_id, row.created_at); }
