@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ChatIndexPage } from "@/pages/ChatPage";
+import { PrivateChatsPage } from "@/pages/PrivateChatsPage";
 
-const title = "المحادثات | ديوان";
-const description = "كل محادثاتك وغرفك في مكان واحد مع تحديث لحظي.";
+const title = "المحادثات الخاصة | ديوان";
+const description = "محادثاتك الخاصة فقط مع الأعضاء.";
 
 export const Route = createFileRoute("/_authenticated/chat/")({
   head: () => ({
@@ -13,5 +13,5 @@ export const Route = createFileRoute("/_authenticated/chat/")({
       { property: "og:description", content: description },
     ],
   }),
-  component: ChatIndexPage,
+  component: PrivateChatsPage,
 });
