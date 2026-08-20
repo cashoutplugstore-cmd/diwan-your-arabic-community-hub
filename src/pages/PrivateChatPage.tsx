@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ImagePlus, Mic, SendHorizonal, Square, Volume2 } from "lucide-react";
+import { ArrowLeft, ImagePlus, Mic, SendHorizonal, Shield, ShieldCheck, Square, Volume2 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -171,7 +170,15 @@ export function PrivateChatPage({ slug }: { slug: string }) {
           <div className={`max-w-[82%] rounded-2xl px-3 py-2 ${mine ? "bg-primary text-primary-foreground rounded-te-md" : "bg-secondary/80 rounded-ts-md"}`}>
             <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold opacity-80">
               <span>{authorName}</span>
-              {role === "admin" ? <Badge variant="secondary" className="h-4 rounded-full px-1.5 text-[8px] font-bold">Admin</Badge> : role === "moderator" ? <Badge variant="secondary" className="h-4 rounded-full px-1.5 text-[8px] font-bold">Moderator</Badge> : null}
+              {role === "admin" ? (
+  <span className="inline-flex items-center gap-1 rounded-full border border-cyan-200/80 bg-gradient-to-r from-sky-500 via-cyan-400 to-sky-500 px-2 py-0.5 text-[8px] font-black tracking-wide text-white shadow-[0_0_12px_rgba(34,211,238,.42)]">
+    <ShieldCheck className="size-3" /> ADMIN
+  </span>
+) : role === "moderator" ? (
+  <span className="inline-flex items-center gap-1 rounded-full border border-blue-200/70 bg-gradient-to-r from-blue-600 to-indigo-500 px-2 py-0.5 text-[8px] font-black tracking-wide text-white shadow-[0_0_9px_rgba(79,70,229,.3)]">
+    <Shield className="size-3" /> MOD
+  </span>
+) : null}
             </div>
             {media?.type === "image" ? url ? <a href={url} target="_blank" rel="noreferrer"><img src={url} alt={media.name || "صورة"} className="max-h-80 max-w-full rounded-xl object-contain" /></a> : <span className="text-xs opacity-70">جاري تحميل الصورة…</span> : media?.type === "audio" ? url ? <audio controls src={url} className="max-w-full" /> : <span className="flex items-center gap-1 text-xs"><Volume2 className="size-4" />جاري تحميل التسجيل…</span> : <p className="whitespace-pre-wrap break-words text-sm leading-5">{message.content}</p>}
             <p className="mt-1 text-[9px] opacity-50">{new Date(message.created_at).toLocaleTimeString("ar", { hour: "2-digit", minute: "2-digit" })}</p>
