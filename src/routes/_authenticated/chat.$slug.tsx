@@ -1,3 +1,4 @@
+import * as React from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { ChatRoomPage } from "@/pages/ChatPage";
 import { PrivateChatPage } from "@/pages/PrivateChatPage";
