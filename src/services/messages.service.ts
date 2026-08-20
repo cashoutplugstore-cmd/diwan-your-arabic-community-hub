@@ -19,73 +19,126 @@ export async function fetchMessagePage(roomId: string, before?: string | null): 
   const { data: profiles } = authorIds.length ? await supabase.from("profiles").select("*").in("id", authorIds) : { data: [] as Profile[] };
   const byId = new Map((profiles ?? []).map((p) => [p.id, p]));
 
-  // Opening/fetching a DM marks it read, so the DM badge clears for this user.
   if (!before) {
     const { data: session } = await supabase.auth.getSession();
     if (session.session?.user?.id) {
       const { data: room } = await supabase.from("rooms").select("is_private").eq("id", roomId).maybeSingle();
-      if (room?.is_private === true) {
-        void (supabase as any).rpc("mark_private_chat_read", { _room_id: roomId });
-      }
+      if (room?.is_private === true) void (supabase as any).rpc("mark_private_chat_read", { _room_id: roomId });
     }
   }
 
   return realRows.map((m) => ({ ...m, author: byId.get(m.user_id) ?? null, is_deleted: Boolean(m.is_deleted) }));
 }
 
-function aiMemberFor(roomId: string, salt: number): { member: typeof aiMembers[number]; author: Profile } {
-  const index = (aiCursorByRoom.get(roomId) ?? 0) % aiMembers.length;
-  aiCursorByRoom.set(roomId, index + 1);
-  const member = aiMembers[(index + salt - 1) % aiMembers.length]!;
-  const author = { id: `ai-local-${index}`, display_name: member.name, username: `ai_${index}`, avatar_url: null, bio: member.personality, status: "online", created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as Profile;
+function hashRoom(roomId: string) {
+  let hash = 2166136261;
+  for (const char of roomId) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+  return Math.abs(hash >>> 0);
+}
+
+function dialectForCountry(countryCode: string | null | undefined) {
+  const value = String(countryCode ?? '').toLowerCase().trim();
+  if (value === 'iq' || value.includes('iraq') || value.includes('العراق')) return 'iraqi' as const;
+  if (value === 'sa' || value.includes('saudi') || value.includes('السعود')) return 'saudi' as const;
+  if (value === 'kw' || value.includes('kuwait') || value.includes('الكويت')) return 'kuwaiti' as const;
+  if (value === 'ae' || value.includes('uae') || value.includes('emirat') || value.includes('الإمارات')) return 'emirati' as const;
+  if (value === 'qa' || value.includes('qatar') || value.includes('قطر')) return 'qatari' as const;
+  if (value === 'bh' || value.includes('bahrain') || value.includes('البحرين')) return 'bahraini' as const;
+  if (value === 'om' || value.includes('oman') || value.includes('عمان')) return 'omani' as const;
+  return null;
+}
+
+async function aiMemberFor(roomId: string, salt: number): Promise<{ member: typeof aiMembers[number]; author: Profile }> {
+  const { data: room } = await supabase.from("rooms").select("country_code, slug, name").eq("id", roomId).maybeSingle();
+  const dialect = dialectForCountry(room?.country_code) ?? dialectForCountry(`${room?.slug ?? ''} ${room?.name ?? ''}`);
+  const pool = (dialect ? aiMembers.filter((member) => member.dialect === dialect) : aiMembers);
+  const cursor = aiCursorByRoom.get(roomId) ?? 0;
+  const start = (hashRoom(roomId) + cursor + salt - 1) % Math.max(pool.length, 1);
+  aiCursorByRoom.set(roomId, cursor + 1);
+  const member = pool[start] ?? aiMembers[(hashRoom(roomId) + salt) % aiMembers.length]!;
+  const author = {
+    id: member.id,
+    display_name: member.name,
+    username: member.id,
+    avatar_url: null,
+    bio: member.personality,
+    status: "online",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  } as Profile;
   return { member, author };
 }
 
 const fallbackReplies = ["ههههه إي والله 😂", "أتفق وياك 😄", "لااا شنو هالحچي 😂", "والله سؤال حلو 👀", "حلوة السالفة، كملوا 😄", "ذكرتيني بموقف صار وياي 😂", "منو جربها؟ 👀", "خل نسويها ونشوف 😂"];
 function uniqueAIContent(roomId: string, candidate: string, salt: number, source: string) {
-  const normalized = candidate.trim().replace(/\s+/g, " "); const recent = recentAIContent.get(roomId) ?? [];
-  if (normalized && !recent.includes(normalized)) { recentAIContent.set(roomId, [...recent, normalized].slice(-10)); return normalized; }
-  const seed = Math.abs([...`${roomId}:${source}:${salt}:${recent.length}`].reduce((n,c)=>n*33+c.charCodeAt(0),7));
-  for(let offset=0;offset<fallbackReplies.length;offset++){const fallback=fallbackReplies[(seed+offset)%fallbackReplies.length]!;if(!recent.includes(fallback)){recentAIContent.set(roomId,[...recent,fallback].slice(-10));return fallback;}}
+  const normalized = candidate.trim().replace(/\s+/g, " ");
+  const recent = recentAIContent.get(roomId) ?? [];
+  if (normalized && !recent.includes(normalized)) {
+    recentAIContent.set(roomId, [...recent, normalized].slice(-10));
+    return normalized;
+  }
+  const seed = Math.abs([...`${roomId}:${source}:${salt}:${recent.length}`].reduce((n, c) => n * 33 + c.charCodeAt(0), 7));
+  for (let offset = 0; offset < fallbackReplies.length; offset++) {
+    const fallback = fallbackReplies[(seed + offset) % fallbackReplies.length]!;
+    if (!recent.includes(fallback)) {
+      recentAIContent.set(roomId, [...recent, fallback].slice(-10));
+      return fallback;
+    }
+  }
   return normalized || "إي والله 😄";
-}
-function fallbackReply(author: Profile, roomId: string, source: string, salt: number, createdAt: number, member: typeof aiMembers[number]): MessageWithAuthor {
-  const generated=buildAiConversation(member,recentAIContent.get(roomId)??[]).text??""; const content=uniqueAIContent(roomId,generated,salt,source);
-  return {id:`ai-fallback-${roomId}-${createdAt}-${salt}`,room_id:roomId,user_id:author.id,content,created_at:new Date(createdAt).toISOString(),reply_to_id:null,edited_at:null,is_deleted:false,author};
 }
 
 async function requestAIRoomReply(roomId: string, message: string, salt: number, createdAt: number, onReply?: AIReplyHandler) {
-  const { member, author } = aiMemberFor(roomId,salt);
+  const { member, author } = await aiMemberFor(roomId, salt);
   try {
-    const recent=(recentAIContent.get(roomId)??[]).slice(-6);
-    const {data,error}=await supabase.functions.invoke("diwan-ai-room",{body:{roomId,roomName:roomId,message,language:"ar",persona:`${member.name} — ${member.personality}`,recentReplies:recent,topics:member.topics,instruction:`أنت ${member.name}، شخصية ${member.personality}. شارك في حوار عربي طبيعي وخفيف. اهتم بمواضيعك: ${member.topics.join(", ")}. لا تكرر كلاماً سابقاً ولا تتحدث كروبوت.`}});
-    if(!error&&data?.message&&onReply){
-      const content=uniqueAIContent(roomId,String(data.message.content??data.text??""),salt,message);
-      onReply({...data.message,content,author:data.message.author??author,is_deleted:Boolean(data.message.is_deleted)} as MessageWithAuthor);
+    const recent = (recentAIContent.get(roomId) ?? []).slice(-6);
+    const { data, error } = await supabase.functions.invoke("diwan-ai-room", {
+      body: {
+        roomId,
+        roomName: roomId,
+        message,
+        language: "ar",
+        persona: `${member.name} — ${member.personality}`,
+        recentReplies: recent,
+        topics: member.topics,
+        instruction: `أنت ${member.name}، شخصية ${member.personality}. شارك في حوار عربي طبيعي وخفيف بلهجة ${member.dialect}. اهتم بمواضيعك: ${member.topics.join(", ")}. لا تكرر كلاماً سابقاً ولا تتحدث كروبوت.`,
+      },
+    });
+    if (!error && data?.message && onReply) {
+      const content = uniqueAIContent(roomId, String(data.message.content ?? data.text ?? ""), salt, message);
+      onReply({ ...data.message, content, author: data.message.author ?? author, is_deleted: Boolean(data.message.is_deleted) } as MessageWithAuthor);
       return;
     }
-  }catch{/* local fallback below */}
-  onReply?.(fallbackReply(author,roomId,message,salt,createdAt,member));
+  } catch { /* local fallback below */ }
+  onReply?.(fallbackReply(author, roomId, message, salt, createdAt, member));
 }
 
-export function triggerAIRoomReplies(input:{roomId:string;messageId:string;message:string;createdAt:string;onReply?:AIReplyHandler}){
-  if(!input.onReply||!input.message.trim())return; const key=`${input.roomId}:${input.messageId}`; if(scheduledAIByMessage.has(key))return; scheduledAIByMessage.add(key);
-  const firstDelay=1500+Math.floor(Math.random()*1800), secondDelay=4200+Math.floor(Math.random()*2200), onReply=input.onReply;
-  window.setTimeout(()=>{void requestAIRoomReply(input.roomId,input.message,1,Date.now(),onReply);},firstDelay);
-  window.setTimeout(()=>{void requestAIRoomReply(input.roomId,input.message,2,Date.now(),onReply);scheduledAIByMessage.delete(key);},secondDelay);
+export function triggerAIRoomReplies(input: { roomId: string; messageId: string; message: string; createdAt: string; onReply?: AIReplyHandler }) {
+  if (!input.onReply || !input.message.trim()) return;
+  const key = `${input.roomId}:${input.messageId}`;
+  if (scheduledAIByMessage.has(key)) return;
+  scheduledAIByMessage.add(key);
+  const firstDelay = 1500 + Math.floor(Math.random() * 1800);
+  const secondDelay = 4200 + Math.floor(Math.random() * 2200);
+  const onReply = input.onReply;
+  window.setTimeout(() => { void requestAIRoomReply(input.roomId, input.message, 1, Date.now(), onReply); }, firstDelay);
+  window.setTimeout(() => { void requestAIRoomReply(input.roomId, input.message, 2, Date.now(), onReply); scheduledAIByMessage.delete(key); }, secondDelay);
 }
 
-export async function sendMessage(input:{roomId:string;userId:string;content:string;replyToId?:string|null;onAIReply?:AIReplyHandler}){
-  const content=input.content.trim().slice(0,MAX_MESSAGE_LENGTH); if(!content)throw new Error("empty"); const clientCreatedAt=new Date().toISOString();
+export async function sendMessage(input: { roomId: string; userId: string; content: string; replyToId?: string | null; onAIReply?: AIReplyHandler }) {
+  const content = input.content.trim().slice(0, MAX_MESSAGE_LENGTH);
+  if (!content) throw new Error("empty");
+  const clientCreatedAt = new Date().toISOString();
   const { data: room, error: roomError } = await supabase.from("rooms").select("is_private").eq("id", input.roomId).maybeSingle();
   if (roomError) throw roomError;
-  const {data,error}=await supabase.from("messages").insert({room_id:input.roomId,user_id:input.userId,content,reply_to_id:input.replyToId??null}).select("id,created_at").single(); if(error)throw error;
-  if(typeof window!=="undefined")window.localStorage.setItem(`diwan:last-real-message:${input.roomId}`,String(Date.now()));
-  // Private DMs are strictly user-to-user: never schedule public-room AI replies here.
+  const { data, error } = await supabase.from("messages").insert({ room_id: input.roomId, user_id: input.userId, content, reply_to_id: input.replyToId ?? null }).select("id,created_at").single();
+  if (error) throw error;
+  if (typeof window !== "undefined") window.localStorage.setItem(`diwan:last-real-message:${input.roomId}`, String(Date.now()));
   if (room?.is_private === true) return;
-  const replyInput={roomId:input.roomId,messageId:data?.id??`${input.userId}:${clientCreatedAt}`,message:content,createdAt:data?.created_at??clientCreatedAt};
-  if(input.onAIReply)triggerAIRoomReplies({...replyInput,onReply:input.onAIReply});
+  const replyInput = { roomId: input.roomId, messageId: data?.id ?? `${input.userId}:${clientCreatedAt}`, message: content, createdAt: data?.created_at ?? clientCreatedAt };
+  if (input.onAIReply) triggerAIRoomReplies({ ...replyInput, onReply: input.onAIReply });
 }
-export async function editMessage(id:string,content:string){const {error}=await supabase.from("messages").update({content:content.trim().slice(0,MAX_MESSAGE_LENGTH),edited_at:new Date().toISOString()}).eq("id",id);if(error)throw error;}
-export async function deleteMessage(id:string){const {error}=await supabase.from("messages").update({is_deleted:true}).eq("id",id);if(error)throw error;}
-export const messagesQuery=(roomId:string|undefined)=>queryOptions({queryKey:["messages",roomId],queryFn:()=>fetchMessagePage(roomId!),enabled:Boolean(roomId)});
+
+export async function editMessage(id: string, content: string) { const { error } = await supabase.from("messages").update({ content: content.trim().slice(0, MAX_MESSAGE_LENGTH), edited_at: new Date().toISOString() }).eq("id", id); if (error) throw error; }
+export async function deleteMessage(id: string) { const { error } = await supabase.from("messages").update({ is_deleted: true }).eq("id", id); if (error) throw error; }
+export const messagesQuery = (roomId: string | undefined) => queryOptions({ queryKey: ["messages", roomId], queryFn: () => fetchMessagePage(roomId!), enabled: Boolean(roomId) });
