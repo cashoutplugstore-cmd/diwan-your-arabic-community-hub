@@ -18,6 +18,18 @@ export async function fetchMessagePage(roomId: string, before?: string | null): 
   const authorIds = [...new Set(realRows.map((m) => m.user_id))];
   const { data: profiles } = authorIds.length ? await supabase.from("profiles").select("*").in("id", authorIds) : { data: [] as Profile[] };
   const byId = new Map((profiles ?? []).map((p) => [p.id, p]));
+
+  // Opening/fetching a DM marks it read, so the DM badge clears for this user.
+  if (!before) {
+    const { data: session } = await supabase.auth.getSession();
+    if (session.session?.user?.id) {
+      const { data: room } = await supabase.from("rooms").select("is_private").eq("id", roomId).maybeSingle();
+      if (room?.is_private === true) {
+        void (supabase as any).rpc("mark_private_chat_read", { _room_id: roomId });
+      }
+    }
+  }
+
   return realRows.map((m) => ({ ...m, author: byId.get(m.user_id) ?? null, is_deleted: Boolean(m.is_deleted) }));
 }
 
