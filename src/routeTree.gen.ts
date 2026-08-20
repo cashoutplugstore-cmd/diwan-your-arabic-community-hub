@@ -18,12 +18,12 @@ import { Route as AuthenticatedFriendsRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
 import { Route as AuthenticatedPremiumRouteImport } from './routes/_authenticated/premium'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
-import { Route as AuthenticatedPublicProfileRouteImport } from './routes/_authenticated/profile.$userId'
 import { Route as AuthenticatedRoomsRouteImport } from './routes/_authenticated/rooms'
 import { Route as AuthenticatedSearchRouteImport } from './routes/_authenticated/search'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedChatIndexRouteImport } from './routes/_authenticated/chat.index'
 import { Route as AuthenticatedChatSlugRouteImport } from './routes/_authenticated/chat.$slug'
+import { Route as AuthenticatedProfileUserIdRouteImport } from './routes/_authenticated/profile.$userId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -70,11 +70,6 @@ const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedPublicProfileRoute = AuthenticatedPublicProfileRouteImport.update({
-  id: '/profile/$userId',
-  path: '/profile/$userId',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const AuthenticatedRoomsRoute = AuthenticatedRoomsRouteImport.update({
   id: '/rooms',
   path: '/rooms',
@@ -100,6 +95,12 @@ const AuthenticatedChatSlugRoute = AuthenticatedChatSlugRouteImport.update({
   path: '/chat/$slug',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedProfileUserIdRoute =
+  AuthenticatedProfileUserIdRouteImport.update({
+    id: '/$userId',
+    path: '/$userId',
+    getParentRoute: () => AuthenticatedProfileRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -109,12 +110,12 @@ export interface FileRoutesByFullPath {
   '/friends': typeof AuthenticatedFriendsRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/premium': typeof AuthenticatedPremiumRoute
-  '/profile': typeof AuthenticatedProfileRoute
-  '/profile/$userId': typeof AuthenticatedPublicProfileRoute
+  '/profile': typeof AuthenticatedProfileRouteWithChildren
   '/rooms': typeof AuthenticatedRoomsRoute
   '/search': typeof AuthenticatedSearchRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/chat/$slug': typeof AuthenticatedChatSlugRoute
+  '/profile/$userId': typeof AuthenticatedProfileUserIdRoute
   '/chat/': typeof AuthenticatedChatIndexRoute
 }
 export interface FileRoutesByTo {
@@ -125,12 +126,12 @@ export interface FileRoutesByTo {
   '/friends': typeof AuthenticatedFriendsRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/premium': typeof AuthenticatedPremiumRoute
-  '/profile': typeof AuthenticatedProfileRoute
-  '/profile/$userId': typeof AuthenticatedPublicProfileRoute
+  '/profile': typeof AuthenticatedProfileRouteWithChildren
   '/rooms': typeof AuthenticatedRoomsRoute
   '/search': typeof AuthenticatedSearchRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/chat/$slug': typeof AuthenticatedChatSlugRoute
+  '/profile/$userId': typeof AuthenticatedProfileUserIdRoute
   '/chat': typeof AuthenticatedChatIndexRoute
 }
 export interface FileRoutesById {
@@ -143,12 +144,12 @@ export interface FileRoutesById {
   '/_authenticated/friends': typeof AuthenticatedFriendsRoute
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
   '/_authenticated/premium': typeof AuthenticatedPremiumRoute
-  '/_authenticated/profile': typeof AuthenticatedProfileRoute
-  '/_authenticated/profile/$userId': typeof AuthenticatedPublicProfileRoute
+  '/_authenticated/profile': typeof AuthenticatedProfileRouteWithChildren
   '/_authenticated/rooms': typeof AuthenticatedRoomsRoute
   '/_authenticated/search': typeof AuthenticatedSearchRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/chat/$slug': typeof AuthenticatedChatSlugRoute
+  '/_authenticated/profile/$userId': typeof AuthenticatedProfileUserIdRoute
   '/_authenticated/chat/': typeof AuthenticatedChatIndexRoute
 }
 export interface FileRouteTypes {
@@ -162,11 +163,11 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/premium'
     | '/profile'
-    | '/profile/$userId'
     | '/rooms'
     | '/search'
     | '/settings'
     | '/chat/$slug'
+    | '/profile/$userId'
     | '/chat/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -178,11 +179,11 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/premium'
     | '/profile'
-    | '/profile/$userId'
     | '/rooms'
     | '/search'
     | '/settings'
     | '/chat/$slug'
+    | '/profile/$userId'
     | '/chat'
   id:
     | '__root__'
@@ -195,11 +196,11 @@ export interface FileRouteTypes {
     | '/_authenticated/notifications'
     | '/_authenticated/premium'
     | '/_authenticated/profile'
-    | '/_authenticated/profile/$userId'
     | '/_authenticated/rooms'
     | '/_authenticated/search'
     | '/_authenticated/settings'
     | '/_authenticated/chat/$slug'
+    | '/_authenticated/profile/$userId'
     | '/_authenticated/chat/'
   fileRoutesById: FileRoutesById
 }
@@ -275,13 +276,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProfileRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/profile/$userId': {
-      id: '/_authenticated/profile/$userId'
-      path: '/profile/$userId'
-      fullPath: '/profile/$userId'
-      preLoaderRoute: typeof AuthenticatedPublicProfileRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/rooms': {
       id: '/_authenticated/rooms'
       path: '/rooms'
@@ -317,16 +311,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedChatSlugRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/profile/$userId': {
+      id: '/_authenticated/profile/$userId'
+      path: '/$userId'
+      fullPath: '/profile/$userId'
+      preLoaderRoute: typeof AuthenticatedProfileUserIdRouteImport
+      parentRoute: typeof AuthenticatedProfileRoute
+    }
   }
 }
+
+interface AuthenticatedProfileRouteChildren {
+  AuthenticatedProfileUserIdRoute: typeof AuthenticatedProfileUserIdRoute
+}
+
+const AuthenticatedProfileRouteChildren: AuthenticatedProfileRouteChildren = {
+  AuthenticatedProfileUserIdRoute: AuthenticatedProfileUserIdRoute,
+}
+
+const AuthenticatedProfileRouteWithChildren =
+  AuthenticatedProfileRoute._addFileChildren(AuthenticatedProfileRouteChildren)
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
   AuthenticatedFriendsRoute: typeof AuthenticatedFriendsRoute
   AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
   AuthenticatedPremiumRoute: typeof AuthenticatedPremiumRoute
-  AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
-  AuthenticatedPublicProfileRoute: typeof AuthenticatedPublicProfileRoute
+  AuthenticatedProfileRoute: typeof AuthenticatedProfileRouteWithChildren
   AuthenticatedRoomsRoute: typeof AuthenticatedRoomsRoute
   AuthenticatedSearchRoute: typeof AuthenticatedSearchRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
@@ -339,8 +350,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedFriendsRoute: AuthenticatedFriendsRoute,
   AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
   AuthenticatedPremiumRoute: AuthenticatedPremiumRoute,
-  AuthenticatedProfileRoute: AuthenticatedProfileRoute,
-  AuthenticatedPublicProfileRoute: AuthenticatedPublicProfileRoute,
+  AuthenticatedProfileRoute: AuthenticatedProfileRouteWithChildren,
   AuthenticatedRoomsRoute: AuthenticatedRoomsRoute,
   AuthenticatedSearchRoute: AuthenticatedSearchRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
@@ -360,3 +370,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
