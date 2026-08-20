@@ -41,8 +41,6 @@ export function useRoomPresence(roomId: string | undefined, me: { userId: string
         .flatMap((list) => list)
         .filter((entry) => Boolean(entry?.userId));
 
-      // A user can have multiple presence refs (tabs/devices). Keep the newest
-      // entry per user so the member list never shows duplicate real users.
       const byUser = new Map<string, PresenceEntry>();
       for (const entry of flat) {
         const existing = byUser.get(entry.userId);
@@ -84,21 +82,24 @@ export function useRoomPresence(roomId: string | undefined, me: { userId: string
         document.visibilityState === "hidden" || Date.now() - lastActive > AWAY_AFTER_MS
           ? "away"
           : "online";
-
+      const onlineAt = new Date().toISOString();
       const payload: PresenceEntry = {
         userId: me.userId,
         status,
         displayName: me.displayName || "عضو",
         avatarUrl: me.avatarUrl ?? null,
-        onlineAt: new Date().toISOString(),
+        onlineAt,
       };
 
       const result = await channel.track(payload);
-      if (result !== "ok") {
-        // Realtime can briefly reconnect on mobile/network changes. The next
-        // heartbeat will retry without breaking the room UI.
-        return;
-      }
+      if (result !== "ok") return;
+
+      // Persist a short-lived heartbeat for room cards/counts and create the
+      // durable room_members row through the database trigger on first entry.
+      await supabase.from("room_presence").upsert(
+        { room_id: roomId, user_id: me.userId, last_seen_at: onlineAt },
+        { onConflict: "room_id,user_id" },
+      );
       sync();
     };
 
@@ -112,7 +113,6 @@ export function useRoomPresence(roomId: string | undefined, me: { userId: string
         sync();
       });
 
-    // Re-announce immediately when the user returns to the tab/app.
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
         markOnline();
@@ -135,6 +135,7 @@ export function useRoomPresence(roomId: string | undefined, me: { userId: string
       previousRef.current = new Map();
       setEntries([]);
       void channel.untrack();
+      void supabase.from("room_presence").delete().eq("room_id", roomId).eq("user_id", me.userId);
       supabase.removeChannel(channel);
     };
   }, [roomId, me?.userId, me?.displayName, me?.avatarUrl]);

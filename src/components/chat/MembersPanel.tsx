@@ -25,7 +25,11 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const presenceById = new Map(presence.map((entry) => [entry.userId, entry]));
-  const demoMembers = useMemo(() => getActiveDemoMembers(16), []);
+  const demoLimit = useMemo(() => {
+    const seed = [...(roomId ?? "general")].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 2166136261);
+    return 4 + (seed % 13);
+  }, [roomId]);
+  const demoMembers = useMemo(() => getActiveDemoMembers(demoLimit), [demoLimit]);
   const realMemberIds = useMemo(() => members.map((member) => member.id).filter((id) => !id.startsWith("demo-")), [members]);
   const roomMeta = useQuery({ queryKey: ["room-role-meta", roomId], enabled: Boolean(roomId), queryFn: async () => {
     const [{ data: room, error: roomError }, { data: roomRoles, error: roleError }] = await Promise.all([
@@ -71,8 +75,11 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
       return { id: member.id, name: member.display_name || member.username || "—", avatar: member.avatar_url, status: (p?.status === "online" || p?.status === "away" || p?.status === "offline" ? p.status : "offline") as Row["status"], role: speakerById.has(member.id) ? "speaker" : (roleById.get(member.id) ?? "member"), speaking: speakerById.has(member.id), demo: false };
     });
     const realIds = new Set(realRows.map((row) => row.id));
-    const demoRows = demoMembers.filter((member) => !realIds.has(member.id)).map((member, index) => ({ id: member.id, name: member.display_name || member.username || "عضو", avatar: member.avatar_url, status: "online" as const, role: index === 2 || index === 9 ? "vip" as const : "member" as const, speaking: false, demo: true }));
-    return [...realRows, ...demoRows];
+    const liveOnlyRows = presence.filter((entry) => !realIds.has(entry.userId)).map((entry) => ({ id: entry.userId, name: entry.displayName || "عضو", avatar: entry.avatarUrl, status: entry.status as Row["status"], role: "member" as const, speaking: false, demo: false }));
+    const mergedRealRows = [...realRows, ...liveOnlyRows.filter((row) => !realIds.has(row.id))];
+    const mergedIds = new Set(mergedRealRows.map((row) => row.id));
+    const demoRows = demoMembers.filter((member) => !mergedIds.has(member.id)).map((member, index) => ({ id: member.id, name: member.display_name || member.username || "عضو", avatar: member.avatar_url, status: "online" as const, role: index === 2 || index === 9 ? "vip" as const : "member" as const, speaking: false, demo: true }));
+    return [...mergedRealRows, ...demoRows];
   }, [members, presence, roleById, speakerById, demoMembers]);
   const staff = rows.filter((row) => row.role === "admin" || row.role === "owner" || row.role === "moderator");
   const speakers = rows.filter((row) => row.speaking && !staff.some((staffRow) => staffRow.id === row.id));
@@ -96,7 +103,7 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
   };
   const renderRow = (row: Row) => <li key={row.id} className={`group relative flex min-w-0 items-center gap-2 rounded-xl px-2 py-2 transition-all hover:bg-secondary/60 ${row.demo ? "bg-secondary/20" : ""} ${row.role === "admin" ? "border border-rose-400/30 bg-rose-500/[0.08]" : row.role === "owner" ? "border border-amber-400/20 bg-amber-500/[0.05]" : row.role === "moderator" ? "border border-sky-400/15 bg-sky-500/[0.04]" : row.role === "vip" ? "border border-fuchsia-400/15 bg-fuchsia-500/[0.04]" : ""}`}>
     <Link to="/profile/$userId" params={{ userId: row.id }} className="flex min-w-0 flex-1 items-center gap-2">
-      <UserAvatar name={row.name} src={row.avatar} size="sm" status={row.status} role={row.role === "owner" ? "admin" : row.role === "moderator" || row.role === "admin" || row.role === "vip" ? row.role : null} showMemberBadge={row.role === "member"} />
+      <UserAvatar name={row.name} src={row.avatar} size="sm" status={row.status} role={row.role === "owner" ? "admin" : row.role === "moderator" || row.role === "admin" || row.role === "vip" ? row.role : null} showMemberBadge={row.role === "member"} autoCurrentRole={false} />
       <span className={`min-w-0 flex-1 truncate text-xs sm:text-sm ${row.role === "admin" ? "font-black text-rose-300" : row.role === "owner" ? "font-black text-amber-300" : row.role === "vip" ? "font-bold text-fuchsia-300" : row.role === "moderator" ? "font-bold text-sky-300" : "font-semibold"}`}>{row.role === "admin" ? "🌹 👑 " : row.role === "owner" ? "👑 " : ""}{row.name}</span>
     </Link>
     {row.demo ? <span className="shrink-0 rounded-full border border-slate-500/30 bg-slate-700/30 px-1.5 py-0.5 text-[8px] font-semibold text-slate-300">نشط</span> : null}
@@ -110,11 +117,7 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
   const section = (title: string, list: Row[]) => list.length ? <section className="px-2.5 pt-2.5"><p className="px-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{title} · {list.length}</p><ul className="space-y-1">{list.slice(0, 48).map(renderRow)}</ul></section> : null;
   const onlineCount = rows.filter((row) => row.status !== "offline").length;
   return <>
-    <header className="flex shrink-0 items-center gap-2 border-b px-3 py-3 sm:px-4 sm:py-4">
-      <Users className="size-4 shrink-0 text-primary sm:size-5" />
-      <h2 className="min-w-0 truncate font-display text-xs font-bold sm:text-sm">{t.chat.members}</h2>
-      <Badge variant="secondary" className="ms-auto shrink-0 px-1.5 text-[10px] sm:px-2 sm:text-xs">{onlineCount} متصل</Badge>
-    </header>
+    <header className="flex shrink-0 items-center gap-2 border-b px-3 py-3 sm:px-4 sm:py-4"><Users className="size-4 shrink-0 text-primary sm:size-5" /><h2 className="min-w-0 truncate font-display text-xs font-bold sm:text-sm">{t.chat.members}</h2><Badge variant="secondary" className="ms-auto shrink-0 px-1.5 text-[10px] sm:px-2 sm:text-xs">{onlineCount} متصل</Badge></header>
     <div className="min-h-0 flex-1 overflow-y-auto scrollbar-slim pb-3">{section("🌹 👑 الإدارة والمشرفون", staff)}{section("🎙️ على المايك", speakers)}{section("💎 VIP", vip)}{section("المتواجدون الآن", online)}{rows.length === 0 ? <p className="p-4 text-center text-xs text-muted-foreground">لا يوجد أعضاء في الغرفة حالياً.</p> : null}</div>
     <section className="shrink-0 border-t bg-secondary/25 p-2.5"><div className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold text-muted-foreground">نشاط الغرفة</div><div className="space-y-1">{activity.length === 0 ? <p className="text-[11px] leading-4 text-muted-foreground">الأعضاء يدخلون ويخرجون بشكل طبيعي…</p> : activity.slice(0, 4).map((event) => <div key={event.id} className="flex min-w-0 items-center gap-2 text-[11px]"><span className="grid size-5 shrink-0 place-items-center rounded-full bg-background">{event.type === "join" ? <LogIn className="size-3 text-emerald-400" /> : <LogOut className="size-3 text-muted-foreground" />}</span><span className="truncate">{event.displayName} {event.type === "join" ? "دخل الغرفة" : "غادر الغرفة"}</span></div>)}</div></section>
   </>;
