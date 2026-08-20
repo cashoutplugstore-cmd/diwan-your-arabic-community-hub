@@ -32,7 +32,14 @@ export function PrivateChatsPage() {
                     <span className="block truncate font-medium">{name}</span>
                     <span className="block truncate text-sm text-muted-foreground">محادثة خاصة</span>
                   </span>
-                  <span className="text-xs text-muted-foreground">{relativeTime(chat.last_message_at ?? chat.created_at, locale)}</span>
+                  <span className="flex shrink-0 flex-col items-end gap-1">
+                    <span className="text-xs text-muted-foreground">{relativeTime(chat.last_message_at ?? chat.created_at, locale)}</span>
+                    {chat.unread_count > 0 ? (
+                      <span className="grid min-w-5 place-items-center rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-black text-primary-foreground">
+                        {chat.unread_count > 99 ? "99+" : chat.unread_count}
+                      </span>
+                    ) : null}
+                  </span>
                 </Link>
               </li>
             );
