@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ImagePlus, Mic, SendHorizonal, Square, Volume2 } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -19,6 +21,7 @@ import type { Profile } from "@/types";
 
 const MEDIA_BUCKET = "chat-media";
 type MediaPayload = { type: "image" | "audio"; path: string; name: string; mime: string; size?: number };
+type UserRole = "admin" | "moderator" | null;
 
 function parseMedia(content: string): MediaPayload | null {
   try { const value = JSON.parse(content); return value?.type && value?.path ? value as MediaPayload : null; } catch { return null; }
@@ -41,6 +44,7 @@ export function PrivateChatPage({ slug }: { slug: string }) {
   const [recording, setRecording] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [mediaUrls, setMediaUrls] = useState<Record<string, string>>({});
+  const [roleMap, setRoleMap] = useState<Record<string, UserRole>>({});
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -48,6 +52,25 @@ export function PrivateChatPage({ slug }: { slug: string }) {
 
   const messages = useInfiniteQuery({ queryKey: ["messages", roomId], enabled: !!roomId, initialPageParam: null as string | null, queryFn: ({ pageParam }) => fetchMessagePage(roomId!, pageParam), getNextPageParam: (last) => last.length < MESSAGE_PAGE_SIZE ? undefined : last[0]?.created_at });
   const items = useMemo(() => [...(messages.data?.pages ?? [])].reverse().flat().filter((m) => !m.is_deleted), [messages.data]);
+  const messageUserIds = useMemo(() => [...new Set(items.map((m) => m.user_id).filter(Boolean))], [items]);
+
+  useEffect(() => {
+    let active = true;
+    const loadRoles = async () => {
+      if (!messageUserIds.length) return;
+      const { data, error } = await supabase.from("user_roles").select("user_id,role").in("user_id", messageUserIds);
+      if (error || !active) return;
+      const next: Record<string, UserRole> = {};
+      for (const id of messageUserIds) next[id] = null;
+      for (const row of data ?? []) {
+        if (row.role === "admin") next[row.user_id] = "admin";
+        else if (row.role === "moderator" && next[row.user_id] !== "admin") next[row.user_id] = "moderator";
+      }
+      setRoleMap((current) => ({ ...current, ...next }));
+    };
+    void loadRoles();
+    return () => { active = false; };
+  }, [messageUserIds]);
 
   useRealtimeMessages(roomId, {
     onInsert: async (message) => {
@@ -68,8 +91,6 @@ export function PrivateChatPage({ slug }: { slug: string }) {
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [items.length]);
 
-  // Important: do not depend on mediaUrls here. The old dependency caused a render/effect loop:
-  // setMediaUrls -> render -> effect -> setMediaUrls -> ... and could freeze the DM.
   useEffect(() => {
     let active = true;
     const load = async () => {
@@ -135,16 +156,23 @@ export function PrivateChatPage({ slug }: { slug: string }) {
   return <section className="glass-strong flex min-h-0 h-[calc(100dvh-115px)] flex-1 flex-col overflow-hidden rounded-2xl lg:h-[calc(100dvh-175px)] lg:rounded-3xl">
     <header className="flex shrink-0 items-center gap-3 border-b bg-background/35 px-3 py-3 sm:px-4">
       <Button type="button" variant="ghost" size="icon" className="size-9 rounded-xl" onClick={() => window.history.back()} aria-label="رجوع"><ArrowLeft className="size-4" /></Button>
-      <UserAvatar name={room.data.name} size="sm" />
+      <Link to="/profile/$userId" params={{ userId: room.data.owner_id }} className="shrink-0 rounded-xl"><UserAvatar name={room.data.name} size="sm" /></Link>
       <div className="min-w-0 flex-1"><h1 className="truncate font-display text-sm font-black sm:text-base">{room.data.name}</h1><p className="text-[10px] text-muted-foreground sm:text-xs">محادثة خاصة • بينك وبين العضو فقط</p></div>
     </header>
     <div className="relative min-h-0 flex-1 overflow-y-auto px-3 py-4 scrollbar-slim"><div className="mx-auto w-full max-w-3xl space-y-2">
       {messages.hasNextPage ? <div className="flex justify-center"><Button variant="ghost" size="sm" onClick={() => void messages.fetchNextPage()}>تحميل الأقدم</Button></div> : null}
       {messages.isLoading ? <MessagesSkeleton /> : items.length === 0 ? <EmptyState title="لا توجد رسائل" description="ابدأ المحادثة بإرسال رسالة." /> : items.map((message) => {
-        const mine = message.user_id === user?.id; const media = parseMedia(message.content); const url = mediaUrls[message.id];
+        const mine = message.user_id === user?.id; const media = parseMedia(message.content); const url = mediaUrls[message.id]; const role = roleMap[message.user_id];
+        const authorName = message.author?.display_name || message.author?.username || "عضو";
         return <div key={message.id} className={`flex items-end gap-2 ${mine ? "flex-row-reverse" : ""}`}>
-          {!mine ? <UserAvatar name={message.author?.display_name || message.author?.username || "عضو"} src={message.author?.avatar_url ?? null} size="sm" /> : null}
+          <Link to="/profile/$userId" params={{ userId: message.user_id }} className="shrink-0 rounded-xl" aria-label={`فتح بروفايل ${authorName}`}>
+            <UserAvatar name={authorName} src={message.author?.avatar_url ?? null} size="sm" />
+          </Link>
           <div className={`max-w-[82%] rounded-2xl px-3 py-2 ${mine ? "bg-primary text-primary-foreground rounded-te-md" : "bg-secondary/80 rounded-ts-md"}`}>
+            <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold opacity-80">
+              <span>{authorName}</span>
+              {role === "admin" ? <Badge variant="secondary" className="h-4 rounded-full px-1.5 text-[8px] font-bold">Admin</Badge> : role === "moderator" ? <Badge variant="secondary" className="h-4 rounded-full px-1.5 text-[8px] font-bold">Moderator</Badge> : null}
+            </div>
             {media?.type === "image" ? url ? <a href={url} target="_blank" rel="noreferrer"><img src={url} alt={media.name || "صورة"} className="max-h-80 max-w-full rounded-xl object-contain" /></a> : <span className="text-xs opacity-70">جاري تحميل الصورة…</span> : media?.type === "audio" ? url ? <audio controls src={url} className="max-w-full" /> : <span className="flex items-center gap-1 text-xs"><Volume2 className="size-4" />جاري تحميل التسجيل…</span> : <p className="whitespace-pre-wrap break-words text-sm leading-5">{message.content}</p>}
             <p className="mt-1 text-[9px] opacity-50">{new Date(message.created_at).toLocaleTimeString("ar", { hour: "2-digit", minute: "2-digit" })}</p>
           </div>
