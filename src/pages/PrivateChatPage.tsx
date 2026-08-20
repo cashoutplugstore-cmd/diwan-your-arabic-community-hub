@@ -68,19 +68,30 @@ export function PrivateChatPage({ slug }: { slug: string }) {
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [items.length]);
 
+  // Important: do not depend on mediaUrls here. The old dependency caused a render/effect loop:
+  // setMediaUrls -> render -> effect -> setMediaUrls -> ... and could freeze the DM.
   useEffect(() => {
     let active = true;
     const load = async () => {
       const entries = await Promise.all(items.map(async (m) => {
         const media = parseMedia(m.content);
-        if (!media || mediaUrls[m.id]) return null;
+        if (!media) return null;
         try { return [m.id, await signedMediaUrl(media.path)] as const; } catch { return null; }
       }));
-      if (active) setMediaUrls((current) => ({ ...current, ...Object.fromEntries(entries.filter(Boolean) as [string, string][]) }));
+      const resolved = Object.fromEntries(entries.filter(Boolean) as [string, string][]);
+      if (!active || Object.keys(resolved).length === 0) return;
+      setMediaUrls((current) => {
+        let changed = false;
+        const next = { ...current };
+        for (const [id, url] of Object.entries(resolved)) {
+          if (!next[id]) { next[id] = url; changed = true; }
+        }
+        return changed ? next : current;
+      });
     };
     void load();
     return () => { active = false; };
-  }, [items, mediaUrls]);
+  }, [items]);
 
   const sendText = useMutation({ mutationFn: (content: string) => sendMessage({ roomId: roomId!, userId: user!.id, content }), onSuccess: () => { setDraft(""); void qc.invalidateQueries({ queryKey: ["messages", roomId] }); }, onError: (error) => toast.error((error as Error).message) });
 
