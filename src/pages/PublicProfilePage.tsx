@@ -8,16 +8,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { aiMembers } from "@/data/aiMembers";
 import { DEMO_PROFILES } from "@/lib/demo-community";
 
-function getProfileIdFromUrl(fallback: string | undefined) {
-  if (typeof window === "undefined") return fallback;
-  const match = window.location.pathname.match(/\/profile\/([^/?#]+)/u);
-  if (!match?.[1]) return fallback;
-  try { return decodeURIComponent(match[1]); } catch { return match[1]; }
-}
-
 export function PublicProfilePage() {
+  // Router params are the source of truth. Reading window.location during client-side
+  // navigation can briefly return the previous profile URL and show the wrong member.
   const params = useParams({ from: "/_authenticated/profile/$userId" });
-  const userId = getProfileIdFromUrl(params.userId);
+  const userId = params.userId;
   const aiBot = aiMembers.find((member) => member.id === userId);
   const demoMember = DEMO_PROFILES.find((member) => member.id === userId);
   const bot = aiBot ?? (demoMember ? { id: demoMember.id, name: demoMember.display_name || demoMember.username, avatar: "🤖", personality: "عضو من مجتمع ديوان", topics: ["السوالف", "المجتمع", "الدردشة"] } : null);
