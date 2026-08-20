@@ -10,11 +10,22 @@ with check (
   and (storage.foldername(name))[1] = auth.uid()::text
 );
 
-create policy "DM media read own folder"
+create policy "DM media read for chat participants"
 on storage.objects for select to authenticated
 using (
   bucket_id = 'chat-media'
-  and (storage.foldername(name))[1] = auth.uid()::text
+  and (
+    (storage.foldername(name))[1] = auth.uid()::text
+    or exists (
+      select 1
+      from public.messages m
+      join public.room_members rm on rm.room_id = m.room_id
+      join public.rooms r on r.id = m.room_id
+      where r.is_private = true
+        and rm.user_id = auth.uid()
+        and m.content like '%"path":"' || storage.objects.name || '"%'
+    )
+  )
 );
 
 create policy "DM media delete own folder"
