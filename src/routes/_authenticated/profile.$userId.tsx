@@ -4,6 +4,11 @@ import { PublicProfilePage } from "@/pages/PublicProfilePage";
 const title = "الملف الشخصي | ديوان";
 const description = "عرض الملف الشخصي لعضو في ديوان.";
 
+function PublicProfileRoute() {
+  const { userId } = Route.useParams();
+  return <PublicProfilePage userId={userId} />;
+}
+
 export const Route = createFileRoute("/_authenticated/profile/$userId")({
   head: () => ({
     meta: [
@@ -13,5 +18,5 @@ export const Route = createFileRoute("/_authenticated/profile/$userId")({
       { property: "og:description", content: description },
     ],
   }),
-  component: PublicProfilePage,
+  component: PublicProfileRoute,
 });
