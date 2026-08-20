@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ChatRoomPage } from "@/pages/ChatPage";
+import { PrivateChatPage } from "@/pages/PrivateChatPage";
+import { supabase } from "@/integrations/supabase/client";
 
-const title = "غرفة المحادثة | ديوان";
-const description = "دردشة فورية داخل غرف ديوان مع تحديث لحظي للرسائل.";
+const title = "المحادثة | ديوان";
+const description = "محادثة خاصة فردية داخل ديوان.";
 
 export const Route = createFileRoute("/_authenticated/chat/$slug")({
   head: () => ({
@@ -18,7 +20,19 @@ export const Route = createFileRoute("/_authenticated/chat/$slug")({
 
 function ChatRoomRoute() {
   const { slug } = Route.useParams();
-  return <ChatRoomPage slug={slug} />;
+  const [isPrivate, setIsPrivate] = React.useState<boolean | null>(null);
+
+  React.useEffect(() => {
+    let active = true;
+    void supabase.from("rooms").select("is_private").eq("slug", slug).maybeSingle().then(({ data }) => {
+      if (active) setIsPrivate(data?.is_private === true);
+    });
+    return () => { active = false; };
+  }, [slug]);
+
+  if (isPrivate === true) return <PrivateChatPage slug={slug} />;
+  if (isPrivate === false) return <ChatRoomPage slug={slug} />;
+  return null;
 }
 
-// Keep the chat route as the deployment entry point for the current UI.
+// Public rooms and private DMs intentionally use separate UIs.
