@@ -5,7 +5,7 @@ import type { CountryNode, Profile, RegionNode, Room, RoomMember, RoomWithStats 
 type RoomDb = Room & { country_code?: string | null; city_name?: string | null; created_at?: string | null };
 type CommunityRoom = RoomWithStats & { region: "arab"; country: string; city: string | null; last_activity_at: string | null };
 
-// Diwan currently exposes only Iraq + the six GCC countries.
+// Public room browser: Iraq + the six GCC countries only.
 const ALLOWED_COUNTRIES = new Set([
   "iraq", "العراق",
   "saudi-arabia", "saudi", "السعودية",
@@ -35,6 +35,8 @@ function normalizeRoom(room: RoomDb): CommunityRoom {
   } as CommunityRoom;
 }
 
+// This query is also used by the DM route. Keep private rooms resolvable by slug;
+// country filtering belongs only to the public room browser/stats queries.
 export async function fetchRooms(): Promise<Room[]> {
   const { data, error } = await supabase
     .from("rooms")
@@ -54,7 +56,6 @@ export async function fetchRoomsWithStats(): Promise<RoomWithStats[]> {
     .order("created_at", { ascending: false });
   if (error) throw error;
 
-  // Foreign/non-GCC public rooms stay in the database but are hidden from Diwan's room browser.
   const rooms = (data ?? []).filter((room) => isAllowedCountry((room as RoomDb).country_code));
   if (!rooms.length) return [];
 
@@ -146,8 +147,8 @@ export async function fetchRoomMembers(roomId: string): Promise<Profile[]> {
 export async function fetchRoomBySlug(slug: string): Promise<Room | null> {
   const { data, error } = await supabase.from("rooms").select("*").eq("slug", slug).maybeSingle();
   if (error) throw error;
-  if (!data || data.is_private || !isAllowedCountry((data as RoomDb).country_code)) return null;
-  return normalizeRoom(data as RoomDb) as Room;
+  // Do not apply public-country filtering here: private DM routes resolve their room by slug too.
+  return data ? (normalizeRoom(data as RoomDb) as Room) : null;
 }
 
 export async function fetchMyMemberships(userId: string): Promise<RoomMember[]> {
