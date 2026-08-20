@@ -65,8 +65,12 @@ export function triggerAIRoomReplies(input:{roomId:string;messageId:string;messa
 
 export async function sendMessage(input:{roomId:string;userId:string;content:string;replyToId?:string|null;onAIReply?:AIReplyHandler}){
   const content=input.content.trim().slice(0,MAX_MESSAGE_LENGTH); if(!content)throw new Error("empty"); const clientCreatedAt=new Date().toISOString();
+  const { data: room, error: roomError } = await supabase.from("rooms").select("is_private").eq("id", input.roomId).maybeSingle();
+  if (roomError) throw roomError;
   const {data,error}=await supabase.from("messages").insert({room_id:input.roomId,user_id:input.userId,content,reply_to_id:input.replyToId??null}).select("id,created_at").single(); if(error)throw error;
   if(typeof window!=="undefined")window.localStorage.setItem(`diwan:last-real-message:${input.roomId}`,String(Date.now()));
+  // Private DMs are strictly user-to-user: never schedule public-room AI replies here.
+  if (room?.is_private === true) return;
   const replyInput={roomId:input.roomId,messageId:data?.id??`${input.userId}:${clientCreatedAt}`,message:content,createdAt:data?.created_at??clientCreatedAt};
   if(input.onAIReply)triggerAIRoomReplies({...replyInput,onReply:input.onAIReply});
 }
