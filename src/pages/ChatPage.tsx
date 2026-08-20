@@ -147,7 +147,43 @@ export function ChatRoomPage({ slug }: { slug: string }) {
       <div ref={scrollRef} onScroll={onScroll} className="relative min-h-0 flex-1 overflow-y-auto px-2.5 py-3 scrollbar-slim"><div className="mx-auto w-full max-w-4xl space-y-2.5">{messages.hasNextPage ? <div className="flex justify-center pb-1"><Button variant="ghost" size="sm" className="h-8 rounded-full text-xs" onClick={() => void messages.fetchNextPage()}><ChevronUp className="size-4" />{t.chat.loadMore}</Button></div> : null}{messages.isLoading ? <MessagesSkeleton /> : items.length === 0 ? <EmptyState icon={MessagesSquare} title={t.chat.noMessages} description={t.chat.startConversation} /> : items.map((message, index) => { const mine = message.user_id === user?.id; const previous = items[index - 1]; const showDay = !previous || dayKey(previous.created_at) !== dayKey(message.created_at); const parent = message.reply_to_id ? byId.get(message.reply_to_id) : undefined; const name = message.author?.display_name || message.author?.username || "—"; const messageRole = roleById.get(message.user_id) ?? (message.user_id === user?.id ? (roles.data?.isAdmin ? "admin" : roles.data?.isModerator ? "moderator" : undefined) : undefined); const admin = messageRole === "admin"; const mod = messageRole === "moderator";
 const targetIsMuted = (restrictions.data ?? []).some(
   (r) => r.user_id === message.user_id && r.kind === "mute"
-); const targetIsSelf = message.user_id === user?.id; const isAI = message.user_id.startsWith("demo-"); const bubble = admin ? "border border-rose-400/35 bg-rose-500/10 shadow-[0_4px_18px_rgba(244,63,94,.08)]" : mod ? "border border-sky-400/25 bg-sky-400/10" : mine ? "bg-primary text-primary-foreground" : "bg-secondary/75 text-secondary-foreground"; return <div key={message.id} className="space-y-2">{showDay ? <div className="flex items-center gap-2 py-1"><span className="h-px flex-1 bg-border" /><span className="rounded-full bg-secondary px-2.5 py-1 text-[9px] font-semibold text-muted-foreground">{dayLabel(message.created_at, locale, t.chat)}</span><span className="h-px flex-1 bg-border" /><span className="h-px flex-1 bg-border" /></div> : null}<div className={`group flex items-end gap-2 ${mine ? "flex-row-reverse" : ""}`}><UserAvatar name={name} src={message.author?.avatar_url ?? null} size="sm" status={isAI ? "online" : presence.onlineIds.has(message.user_id) ? "online" : undefined} role={messageRole ?? null} /><div className={`min-w-0 max-w-[88%] sm:max-w-[72%] ${mine ? "items-end" : "items-start"}`}><div className={`rounded-2xl px-3.5 py-2 ${mine ? "rounded-te-md" : "rounded-ts-md"} ${bubble}`}><div className="mb-0.5 flex flex-wrap items-center gap-1.5">{admin ? <span className="rounded-full border border-rose-400/40 bg-rose-500/10 px-1.5 py-0.5 text-[8px] font-black text-rose-300">👑 ADMIN</span> : mod ? <span className="rounded-full border border-sky-400/40 bg-sky-500/10 px-1.5 py-0.5 text-[8px] font-black text-sky-300">MOD</span> : null}<p className={admin ? "text-[10px] font-black text-rose-300" : mod ? "text-[10px] font-bold text-sky-300" : "text-[10px] font-semibold opacity-70"}>{name}</p></div>{parent ? <p className="mb-1.5 truncate rounded-lg border-s-2 border-current/25 ps-2 text-[10px] opacity-65">{parent.author?.display_name || parent.author?.username}: {parent.content}</p> : null}<p className="whitespace-pre-wrap break-words text-[13px] leading-5 sm:text-sm">{highlight(message.content)}</p><p className="mt-1 text-[9px] opacity-50">{timeOfDay(message.created_at, locale)}</p></div></div>{!message.is_deleted && !message.id.startsWith("optimistic-") ? <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="size-7 self-center opacity-0 transition group-hover:opacity-100 focus:opacity-100"><MoreVertical className="size-3.5" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => setReplyTo(message)}><Reply className="size-4" />{t.chat.reply}</DropdownMenuItem><DropdownMenuItem onClick={() => void navigator.clipboard.writeText(message.content)}><Copy className="size-4" />{t.chat.copy}</DropdownMenuItem>{!targetIsSelf && !mine && !isAI ? <><DropdownMenuItem onClick={() => toast.info("نظام الإبلاغ متاح من لوحة الإشراف")}><Flag className="size-4" />إبلاغ عن العضو</DropdownMenuItem><DropdownMenuItem onClick={() => block.mutate(message.user_id)} disabled={block.isPending}><UserX className="size-4" />حظر هذا العضو لدي</DropdownMenuItem>{canModerate ? <><DropdownMenuSeparator /><DropdownMenuItem
+); const targetIsSelf = message.user_id === user?.id; const isAI = message.user_id.startsWith("demo-"); const bubble = admin ? "border border-rose-400/35 bg-rose-500/10 shadow-[0_4px_18px_rgba(244,63,94,.08)]" : mod ? "border border-sky-400/25 bg-sky-400/10" : mine ? "bg-primary text-primary-foreground" : "bg-secondary/75 text-secondary-foreground"; return <div key={message.id} className="space-y-2">{showDay ? <div className="flex items-center gap-2 py-1"><span className="h-px flex-1 bg-border" /><span className="rounded-full bg-secondary px-2.5 py-1 text-[9px] font-semibold text-muted-foreground">{dayLabel(message.created_at, locale, t.chat)}</span><span className="h-px flex-1 bg-border" /><span className="h-px flex-1 bg-border" /></div> : null}<div className={`group flex items-end gap-2 ${mine ? "flex-row-reverse" : ""}`}>{isAI ? (
+  <UserAvatar
+    name={name}
+    src={message.author?.avatar_url ?? null}
+    size="sm"
+    status="online"
+    role={messageRole ?? null}
+  />
+) : (
+  <Link
+    to="/profile/$userId"
+    params={{ userId: message.user_id }}
+    className="shrink-0 rounded-full transition hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary"
+    aria-label={`عرض بروفايل ${name}`}
+  >
+    <UserAvatar
+      name={name}
+      src={message.author?.avatar_url ?? null}
+      size="sm"
+      status={presence.onlineIds.has(message.user_id) ? "online" : undefined}
+      role={messageRole ?? null}
+      autoCurrentRole={false}
+    />
+  </Link>
+)}<div className={`min-w-0 max-w-[88%] sm:max-w-[72%] ${mine ? "items-end" : "items-start"}`}><div className={`rounded-2xl px-3.5 py-2 ${mine ? "rounded-te-md" : "rounded-ts-md"} ${bubble}`}><div className="mb-0.5 flex flex-wrap items-center gap-1.5">{admin ? <span className="rounded-full border border-rose-400/40 bg-rose-500/10 px-1.5 py-0.5 text-[8px] font-black text-rose-300">👑 ADMIN</span> : mod ? <span className="rounded-full border border-sky-400/40 bg-sky-500/10 px-1.5 py-0.5 text-[8px] font-black text-sky-300">MOD</span> : null}{isAI ? (
+  <p className={admin ? "text-[10px] font-black text-rose-300" : mod ? "text-[10px] font-bold text-sky-300" : "text-[10px] font-semibold opacity-70"}>
+    {name}
+  </p>
+) : (
+  <Link
+    to="/profile/$userId"
+    params={{ userId: message.user_id }}
+    className={admin ? "text-[10px] font-black text-rose-300 hover:underline" : mod ? "text-[10px] font-bold text-sky-300 hover:underline" : "text-[10px] font-semibold opacity-70 hover:underline"}
+  >
+    {name}
+  </Link>
+)}</div>{parent ? <p className="mb-1.5 truncate rounded-lg border-s-2 border-current/25 ps-2 text-[10px] opacity-65">{parent.author?.display_name || parent.author?.username}: {parent.content}</p> : null}<p className="whitespace-pre-wrap break-words text-[13px] leading-5 sm:text-sm">{highlight(message.content)}</p><p className="mt-1 text-[9px] opacity-50">{timeOfDay(message.created_at, locale)}</p></div></div>{!message.is_deleted && !message.id.startsWith("optimistic-") ? <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="size-7 self-center opacity-0 transition group-hover:opacity-100 focus:opacity-100"><MoreVertical className="size-3.5" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => setReplyTo(message)}><Reply className="size-4" />{t.chat.reply}</DropdownMenuItem><DropdownMenuItem onClick={() => void navigator.clipboard.writeText(message.content)}><Copy className="size-4" />{t.chat.copy}</DropdownMenuItem>{!targetIsSelf && !mine && !isAI ? <><DropdownMenuItem onClick={() => toast.info("نظام الإبلاغ متاح من لوحة الإشراف")}><Flag className="size-4" />إبلاغ عن العضو</DropdownMenuItem><DropdownMenuItem onClick={() => block.mutate(message.user_id)} disabled={block.isPending}><UserX className="size-4" />حظر هذا العضو لدي</DropdownMenuItem>{canModerate ? <><DropdownMenuSeparator /><DropdownMenuItem
   onClick={() =>
     targetIsMuted
       ? unmute.mutate(message.user_id)
