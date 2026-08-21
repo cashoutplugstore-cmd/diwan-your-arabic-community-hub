@@ -12,26 +12,26 @@ import { useI18n } from "@/contexts/i18n-context";
 import { supabase } from "@/integrations/supabase/client";
 import { looseDb } from "@/integrations/supabase/loose-db";
 import { myRolesQuery } from "@/services/roles.service";
-import { getActiveDemoMembers } from "@/lib/demo-activity";
+import { getAiMembersForRoom } from "@/data/aiMembers";
 import type { PresenceActivity, PresenceEntry } from "@/hooks/use-presence";
 import type { Profile } from "@/types";
 
-type Props = { members: Profile[]; presence: PresenceEntry[]; activity?: PresenceActivity[] | undefined; roomId?: string | undefined };
+type Props = { members: Profile[]; presence: PresenceEntry[]; activity?: PresenceActivity[]; roomId?: string };
 type Role = "admin" | "moderator" | "vip" | "speaker" | "owner" | "member" | null;
-type Row = { id: string; name: string; avatar: string | null; status: "online" | "away" | "offline"; role: Role; speaking: boolean; demo?: boolean };
+type Row = { id: string; name: string; avatar: string | null; status: "online" | "away" | "offline"; role: Role; speaking: boolean; virtual?: boolean };
+
+function virtualProfile(member: ReturnType<typeof getAiMembersForRoom>[number]): Profile {
+  return { id: member.id, display_name: member.name, username: `${member.name}-${member.id.split("-").pop()}`, avatar_url: null, bio: `${member.personality}. يحب السوالف عن ${member.topics.join("، ")}.`, status: "online", created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as Profile;
+}
 
 function PanelContent({ members, presence, activity = [], roomId }: Props) {
   const { t } = useI18n();
   const { user } = useAuth();
   const qc = useQueryClient();
-  const presenceById = new Map(presence.map((entry) => [entry.userId, entry]));
-  const demoLimit = useMemo(() => {
-    const seed = [...(roomId ?? "general")].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 2166136261);
-    return 4 + (seed % 13);
-  }, [roomId]);
-  const demoMembers = useMemo(() => getActiveDemoMembers(demoLimit), [demoLimit]);
-  const realMemberIds = useMemo(() => members.map((member) => member.id).filter((id) => !id.startsWith("demo-")), [members]);
-  const roomMeta = useQuery({ queryKey: ["room-role-meta", roomId], enabled: Boolean(roomId), queryFn: async () => {
+  const presenceById = useMemo(() => new Map(presence.map((entry) => [entry.userId, entry])), [presence]);
+  const virtualMembers = useMemo(() => roomId ? getAiMembersForRoom(roomId, 8).map(virtualProfile) : [], [roomId]);
+  const realMemberIds = useMemo(() => members.map((member) => member.id).filter((id) => !id.startsWith("virtual-")), [members]);
+  const roomMeta = useQuery({ queryKey: ["room-role-meta", roomId], enabled: Boolean(roomId), staleTime: 30000, queryFn: async () => {
     const [{ data: room, error: roomError }, { data: roomRoles, error: roleError }] = await Promise.all([
       supabase.from("rooms").select("owner_id").eq("id", roomId!).maybeSingle(),
       supabase.from("room_members").select("user_id,role").eq("room_id", roomId!),
@@ -39,21 +39,21 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
     if (roomError) throw roomError;
     if (roleError) throw roleError;
     return { ownerId: room?.owner_id ?? null, roomRoles: roomRoles ?? [] };
-  }, staleTime: 10000 });
+  });
   const globalRoles = useQuery(myRolesQuery(user?.id));
   const canManageRoles = Boolean(user && (globalRoles.data?.isAdmin || roomMeta.data?.ownerId === user.id));
-  const rolesQuery = useQuery({ queryKey: ["member-roles", realMemberIds.join(",")], enabled: realMemberIds.length > 0, queryFn: async () => {
+  const rolesQuery = useQuery({ queryKey: ["member-roles", realMemberIds.join(",")], enabled: realMemberIds.length > 0, staleTime: 60000, queryFn: async () => {
     const [{ data: roles }, { data: vip }] = await Promise.all([
       supabase.from("user_roles").select("user_id,role").in("user_id", realMemberIds),
       looseDb.from("premium_subscriptions").select("user_id,status,expires_at").in("user_id", realMemberIds).eq("status", "active"),
     ]);
     return { roles: roles ?? [], vip: ((vip ?? []) as any[]).filter((row) => !row.expires_at || new Date(row.expires_at).getTime() > Date.now()) };
-  }, staleTime: 30000 });
-  const voiceQuery = useQuery({ queryKey: ["room-speakers", roomId], enabled: Boolean(roomId), queryFn: async () => {
+  });
+  const voiceQuery = useQuery({ queryKey: ["room-speakers", roomId], enabled: Boolean(roomId), staleTime: 4000, refetchInterval: 5000, queryFn: async () => {
     const { data, error } = await supabase.from("room_voice_participants").select("user_id,is_speaker,is_muted").eq("room_id", roomId!).eq("is_speaker", true);
     if (error) throw error;
     return data ?? [];
-  }, staleTime: 0, refetchInterval: 3000 });
+  });
   const roleById = useMemo(() => {
     const map = new Map<string, Role>();
     for (const row of roomMeta.data?.roomRoles ?? []) {
@@ -72,66 +72,47 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
   const rows = useMemo<Row[]>(() => {
     const realRows = members.map((member) => {
       const p = presenceById.get(member.id);
-      return { id: member.id, name: member.display_name || member.username || "—", avatar: member.avatar_url, status: (p?.status === "online" || p?.status === "away" || p?.status === "offline" ? p.status : "offline") as Row["status"], role: speakerById.has(member.id) ? "speaker" : (roleById.get(member.id) ?? "member"), speaking: speakerById.has(member.id), demo: false };
+      return { id: member.id, name: member.display_name || member.username || "—", avatar: member.avatar_url, status: (p?.status === "online" || p?.status === "away" || p?.status === "offline" ? p.status : "offline") as Row["status"], role: speakerById.has(member.id) ? "speaker" : (roleById.get(member.id) ?? "member"), speaking: speakerById.has(member.id) };
     });
     const realIds = new Set(realRows.map((row) => row.id));
-    const liveOnlyRows = presence.filter((entry) => !realIds.has(entry.userId)).map((entry) => ({ id: entry.userId, name: entry.displayName || "عضو", avatar: entry.avatarUrl, status: entry.status as Row["status"], role: "member" as const, speaking: false, demo: false }));
-    const mergedRealRows = [...realRows, ...liveOnlyRows.filter((row) => !realIds.has(row.id))];
-    const mergedIds = new Set(mergedRealRows.map((row) => row.id));
-    const demoRows = demoMembers.filter((member) => !mergedIds.has(member.id)).map((member, index) => ({ id: member.id, name: member.display_name || member.username || "عضو", avatar: member.avatar_url, status: "online" as const, role: index === 2 || index === 9 ? "vip" as const : "member" as const, speaking: false, demo: true }));
-    return [...mergedRealRows, ...demoRows];
-  }, [members, presence, roleById, speakerById, demoMembers]);
+    const liveOnlyRows = presence.filter((entry) => !realIds.has(entry.userId)).map((entry) => ({ id: entry.userId, name: entry.displayName || "عضو", avatar: entry.avatarUrl, status: entry.status as Row["status"], role: "member" as const, speaking: false }));
+    const merged = [...realRows, ...liveOnlyRows.filter((row) => !realIds.has(row.id))];
+    const mergedIds = new Set(merged.map((row) => row.id));
+    const aiRows = virtualMembers.filter((member) => !mergedIds.has(member.id)).map((member, index) => ({ id: member.id, name: member.display_name || member.username || "عضو", avatar: member.avatar_url, status: "online" as const, role: index === 2 || index === 6 ? "vip" as const : "member" as const, speaking: false, virtual: true }));
+    return [...merged, ...aiRows];
+  }, [members, presence, presenceById, roleById, speakerById, virtualMembers]);
   const staff = rows.filter((row) => row.role === "admin" || row.role === "owner" || row.role === "moderator");
-  const speakers = rows.filter((row) => row.speaking && !staff.some((staffRow) => staffRow.id === row.id));
+  const speakers = rows.filter((row) => row.speaking && !staff.some((x) => x.id === row.id));
   const vip = rows.filter((row) => row.role === "vip");
   const online = rows.filter((row) => row.role === "member" && row.status !== "offline");
   const changeRole = useMutation({ mutationFn: async ({ userId, role }: { userId: string; role: "member" | "moderator" }) => {
     if (!roomId || !user || !canManageRoles) throw new Error("غير مصرح");
-    if (userId.startsWith("demo-") || userId === user.id || userId === roomMeta.data?.ownerId) throw new Error("لا يمكن تعديل عضو تجريبي أو هذا العضو");
+    if (userId.startsWith("virtual-") || userId === user.id || userId === roomMeta.data?.ownerId) throw new Error("لا يمكن تعديل هذا العضو");
     const { error } = await supabase.from("room_members").update({ role }).eq("room_id", roomId).eq("user_id", userId);
     if (error) throw error;
-  }, onSuccess: async (_, input) => {
-    await qc.invalidateQueries({ queryKey: ["room-role-meta", roomId] });
-    await qc.invalidateQueries({ queryKey: ["room_members", "profiles", roomId] });
-    await qc.invalidateQueries({ queryKey: ["room-member-roles", roomId] });
-    toast.success(input.role === "moderator" ? "تم تعيين العضو مشرفاً في الغرفة" : "تم إرجاع العضو إلى رتبة عضو");
-  }, onError: (error) => toast.error((error as Error).message) });
+  }, onSuccess: async (_, input) => { await qc.invalidateQueries({ queryKey: ["room-role-meta", roomId] }); await qc.invalidateQueries({ queryKey: ["room_members", "profiles", roomId] }); toast.success(input.role === "moderator" ? "تم تعيين العضو مشرفاً في الغرفة" : "تم إرجاع العضو إلى رتبة عضو"); }, onError: (error) => toast.error((error as Error).message) });
   const renderRoleActions = (row: Row) => {
-    if (!canManageRoles || !roomId || row.demo || row.id === user?.id || row.id === roomMeta.data?.ownerId || row.role === "admin" || row.role === "speaker") return null;
+    if (!canManageRoles || !roomId || row.virtual || row.id === user?.id || row.id === roomMeta.data?.ownerId || row.role === "admin" || row.role === "speaker") return null;
     const isModerator = row.role === "moderator";
-    return <DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon" className="size-8 shrink-0 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100" aria-label={`تعديل رتبة ${row.name}`}><MoreVertical className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="min-w-44"><DropdownMenuItem onClick={() => changeRole.mutate({ userId: row.id, role: isModerator ? "member" : "moderator" })} disabled={changeRole.isPending}><Shield className="size-4" />{isModerator ? "إزالة رتبة المشرف" : "تعيين كمشرف"}</DropdownMenuItem>{isModerator ? <DropdownMenuSeparator /> : null}{isModerator ? <DropdownMenuItem onClick={() => changeRole.mutate({ userId: row.id, role: "member" })} disabled={changeRole.isPending}>إرجاع إلى عضو</DropdownMenuItem> : null}</DropdownMenuContent></DropdownMenu>;
+    return <DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon" className="size-8 shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100" aria-label={`تعديل رتبة ${row.name}`}><MoreVertical className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="min-w-44"><DropdownMenuItem onClick={() => changeRole.mutate({ userId: row.id, role: isModerator ? "member" : "moderator" })} disabled={changeRole.isPending}><Shield className="size-4" />{isModerator ? "إزالة رتبة المشرف" : "تعيين كمشرف"}</DropdownMenuItem>{isModerator ? <DropdownMenuSeparator /> : null}{isModerator ? <DropdownMenuItem onClick={() => changeRole.mutate({ userId: row.id, role: "member" })} disabled={changeRole.isPending}>إرجاع إلى عضو</DropdownMenuItem> : null}</DropdownMenuContent></DropdownMenu>;
   };
-  const renderRow = (row: Row) => <li key={row.id} className={`group relative flex min-w-0 items-center gap-2 rounded-xl px-2 py-2 transition-all hover:bg-secondary/60 ${row.demo ? "bg-secondary/20" : ""} ${row.role === "admin" ? "border border-rose-400/30 bg-rose-500/[0.08]" : row.role === "owner" ? "border border-amber-400/20 bg-amber-500/[0.05]" : row.role === "moderator" ? "border border-sky-400/15 bg-sky-500/[0.04]" : row.role === "vip" ? "border border-fuchsia-400/15 bg-fuchsia-500/[0.04]" : ""}`}>
-    <Link to="/profile/$userId" params={{ userId: row.id }} className="flex min-w-0 flex-1 items-center gap-2">
-      <UserAvatar name={row.name} src={row.avatar} size="sm" status={row.status} role={row.role === "owner" ? "admin" : row.role === "moderator" || row.role === "admin" || row.role === "vip" ? row.role : null} showMemberBadge={row.role === "member"} autoCurrentRole={false} />
-      <span className={`min-w-0 flex-1 truncate text-xs sm:text-sm ${row.role === "admin" ? "font-black text-rose-300" : row.role === "owner" ? "font-black text-amber-300" : row.role === "vip" ? "font-bold text-fuchsia-300" : row.role === "moderator" ? "font-bold text-sky-300" : "font-semibold"}`}>{row.role === "admin" ? "🌹 👑 " : row.role === "owner" ? "👑 " : ""}{row.name}</span>
-    </Link>
-    {row.demo ? <span className="shrink-0 rounded-full border border-slate-500/30 bg-slate-700/30 px-1.5 py-0.5 text-[8px] font-semibold text-slate-300">نشط</span> : null}
-    {row.role === "admin" ? <Badge className="order-first shrink-0 border-rose-400/40 bg-rose-500/15 px-1.5 py-0 text-[8px] font-black text-rose-300">ADMIN</Badge> : null}
-    {row.role === "owner" ? <Badge className="order-first shrink-0 border-amber-400/30 bg-amber-500/10 px-1.5 py-0 text-[8px] font-black text-amber-300">مالك</Badge> : null}
-    {row.role === "moderator" ? <Badge className="order-first shrink-0 border-sky-400/30 bg-sky-500/10 px-1.5 py-0 text-[8px] font-bold text-sky-300">MOD</Badge> : null}
-    {row.role === "vip" ? <Crown className="size-3 shrink-0 text-fuchsia-300" aria-label="VIP" /> : null}
-    {row.speaking ? <Mic2 className="size-3 shrink-0 animate-pulse text-emerald-400" aria-label="على المايك" /> : null}
-    {renderRoleActions(row)}
+  const renderRow = (row: Row) => <li key={row.id} className={`group relative flex min-w-0 items-center gap-2 rounded-xl px-2 py-2 transition hover:bg-secondary/60 ${row.role === "admin" ? "border border-rose-400/30 bg-rose-500/[0.08]" : row.role === "owner" ? "border border-amber-400/20 bg-amber-500/[0.05]" : row.role === "moderator" ? "border border-sky-400/15 bg-sky-500/[0.04]" : row.role === "vip" ? "border border-fuchsia-400/15 bg-fuchsia-500/[0.04]" : ""}`}>
+    <Link to="/profile/$userId" params={{ userId: row.id }} className="flex min-w-0 flex-1 items-center gap-2"><UserAvatar name={row.name} src={row.avatar} size="sm" status={row.status} role={row.role === "owner" ? "admin" : row.role === "moderator" || row.role === "admin" || row.role === "vip" ? row.role : null} showMemberBadge={row.role === "member"} autoCurrentRole={false} /><span className={`min-w-0 flex-1 truncate text-xs sm:text-sm ${row.role === "admin" ? "font-black text-rose-300" : row.role === "owner" ? "font-black text-amber-300" : row.role === "vip" ? "font-bold text-fuchsia-300" : row.role === "moderator" ? "font-bold text-sky-300" : "font-semibold"}`}>{row.role === "admin" ? "🌹 👑 " : row.role === "owner" ? "👑 " : ""}{row.name}</span></Link>
+    {row.role === "admin" ? <Badge className="order-first shrink-0 border-rose-400/40 bg-rose-500/15 px-1.5 py-0 text-[8px] font-black text-rose-300">ADMIN</Badge> : null}{row.role === "owner" ? <Badge className="order-first shrink-0 border-amber-400/30 bg-amber-500/10 px-1.5 py-0 text-[8px] font-black text-amber-300">مالك</Badge> : null}{row.role === "moderator" ? <Badge className="order-first shrink-0 border-sky-400/30 bg-sky-500/10 px-1.5 py-0 text-[8px] font-bold text-sky-300">MOD</Badge> : null}{row.role === "vip" ? <Crown className="size-3 shrink-0 text-fuchsia-300" aria-label="VIP" /> : null}{row.speaking ? <Mic2 className="size-3 shrink-0 animate-pulse text-emerald-400" aria-label="على المايك" /> : null}{renderRoleActions(row)}
   </li>;
   const section = (title: string, list: Row[]) => list.length ? <section className="px-2.5 pt-2.5"><p className="px-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{title} · {list.length}</p><ul className="space-y-1">{list.slice(0, 48).map(renderRow)}</ul></section> : null;
   const onlineCount = rows.filter((row) => row.status !== "offline").length;
-  return <>
-    <header className="flex shrink-0 items-center gap-2 border-b px-3 py-3 sm:px-4 sm:py-4"><Users className="size-4 shrink-0 text-primary sm:size-5" /><h2 className="min-w-0 truncate font-display text-xs font-bold sm:text-sm">{t.chat.members}</h2><Badge variant="secondary" className="ms-auto shrink-0 px-1.5 text-[10px] sm:px-2 sm:text-xs">{onlineCount} متصل</Badge></header>
-    <div className="min-h-0 flex-1 overflow-y-auto scrollbar-slim pb-3">{section("🌹 👑 الإدارة والمشرفون", staff)}{section("🎙️ على المايك", speakers)}{section("💎 VIP", vip)}{section("المتواجدون الآن", online)}{rows.length === 0 ? <p className="p-4 text-center text-xs text-muted-foreground">لا يوجد أعضاء في الغرفة حالياً.</p> : null}</div>
-    <section className="shrink-0 border-t bg-secondary/25 p-2.5"><div className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold text-muted-foreground">نشاط الغرفة</div><div className="space-y-1">{activity.length === 0 ? <p className="text-[11px] leading-4 text-muted-foreground">الأعضاء يدخلون ويخرجون بشكل طبيعي…</p> : activity.slice(0, 4).map((event) => <div key={event.id} className="flex min-w-0 items-center gap-2 text-[11px]"><span className="grid size-5 shrink-0 place-items-center rounded-full bg-background">{event.type === "join" ? <LogIn className="size-3 text-emerald-400" /> : <LogOut className="size-3 text-muted-foreground" />}</span><span className="truncate">{event.displayName} {event.type === "join" ? "دخل الغرفة" : "غادر الغرفة"}</span></div>)}</div></section>
-  </>;
+  return <><header className="flex shrink-0 items-center gap-2 border-b px-3 py-3 sm:px-4 sm:py-4"><Users className="size-4 shrink-0 text-primary sm:size-5" /><h2 className="min-w-0 truncate font-display text-xs font-bold sm:text-sm">{t.chat.members}</h2><Badge variant="secondary" className="ms-auto shrink-0 px-1.5 text-[10px] sm:px-2 sm:text-xs">{onlineCount} متصل</Badge></header><div className="min-h-0 flex-1 overflow-y-auto scrollbar-slim pb-3">{section("🌹 👑 الإدارة والمشرفون", staff)}{section("🎙️ على المايك", speakers)}{section("💎 VIP", vip)}{section("المتواجدون الآن", online)}{rows.length === 0 ? <p className="p-4 text-center text-xs text-muted-foreground">لا يوجد أعضاء في الغرفة حالياً.</p> : null}</div><section className="shrink-0 border-t bg-secondary/25 p-2.5"><div className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold text-muted-foreground">نشاط الغرفة</div><div className="space-y-1">{activity.length === 0 ? <p className="text-[11px] leading-4 text-muted-foreground">الأعضاء يدخلون ويخرجون بشكل طبيعي…</p> : activity.slice(0, 4).map((event) => <div key={event.id} className="flex min-w-0 items-center gap-2 text-[11px]"><span className="grid size-5 shrink-0 place-items-center rounded-full bg-background">{event.type === "join" ? <LogIn className="size-3 text-emerald-400" /> : <LogOut className="size-3 text-muted-foreground" />}</span><span className="truncate">{event.displayName}</span></div>)}</div></section></>;
 }
 
 export function MembersPanel(props: Props) {
+  const [isMobile, setIsMobile] = useState(false);
   const [open, setOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches);
   const { t } = useI18n();
   useEffect(() => { const media = window.matchMedia("(max-width: 1023px)"); const sync = () => setIsMobile(media.matches); sync(); media.addEventListener("change", sync); return () => media.removeEventListener("change", sync); }, []);
-  useEffect(() => { if (!isMobile || typeof window === "undefined") return; const openMembers = () => setOpen(true); window.addEventListener("diwan:open-members", openMembers); return () => window.removeEventListener("diwan:open-members", openMembers); }, [isMobile]);
-  useEffect(() => { if (!isMobile || typeof document === "undefined") return; const title = document.querySelector<HTMLElement>("main header h1"); if (!title) return; const previousRole = title.getAttribute("role"); const previousTabIndex = title.getAttribute("tabindex"); const previousLabel = title.getAttribute("aria-label"); title.setAttribute("role", "button"); title.setAttribute("tabindex", "0"); title.setAttribute("aria-label", `${title.textContent?.trim() || "الغرفة"} — ${t.chat.members}`); title.classList.add("cursor-pointer", "select-none"); const openFromTitle = () => setOpen(true); const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setOpen(true); } }; title.addEventListener("click", openFromTitle); title.addEventListener("keydown", onKeyDown); return () => { title.removeEventListener("click", openFromTitle); title.removeEventListener("keydown", onKeyDown); if (previousRole === null) title.removeAttribute("role"); else title.setAttribute("role", previousRole); if (previousTabIndex === null) title.removeAttribute("tabindex"); else title.setAttribute("tabindex", previousTabIndex); if (previousLabel === null) title.removeAttribute("aria-label"); else title.setAttribute("aria-label", previousLabel); title.classList.remove("cursor-pointer", "select-none"); }; }, [isMobile, t.chat.members]);
-  useEffect(() => { if (!open) return; const previous = document.body.style.overflow; document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = previous; }; }, [open]);
-  useEffect(() => { if (!open) return; const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); }; window.addEventListener("keydown", onKeyDown); return () => window.removeEventListener("keydown", onKeyDown); }, [open]);
+  useEffect(() => { if (!isMobile) return; const openMembers = () => setOpen(true); window.addEventListener("diwan:open-members", openMembers); return () => window.removeEventListener("diwan:open-members", openMembers); }, [isMobile]);
+  useEffect(() => { if (!isMobile) return; const title = document.querySelector<HTMLElement>("main header h1"); if (!title) return; const openFromTitle = () => setOpen(true); title.addEventListener("click", openFromTitle); return () => title.removeEventListener("click", openFromTitle); }, [isMobile]);
+  useEffect(() => { if (!open) return; const previous = document.body.style.overflow; document.body.style.overflow = "hidden"; const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); }; window.addEventListener("keydown", onKeyDown); return () => { document.body.style.overflow = previous; window.removeEventListener("keydown", onKeyDown); }; }, [open]);
   if (isMobile) return <>{open ? <div className="fixed inset-0 z-[70]" role="presentation"><button type="button" className="absolute inset-0 bg-background/60 backdrop-blur-sm" onClick={() => setOpen(false)} aria-label="إغلاق الأعضاء" /><aside className="absolute inset-y-0 end-0 flex w-[min(88vw,22rem)] flex-col overflow-hidden border-s bg-background shadow-2xl" role="dialog" aria-modal="true" aria-label={t.chat.members}><div className="flex shrink-0 items-center justify-between border-b p-2"><span className="px-2 text-xs font-semibold text-muted-foreground">{t.chat.members}</span><Button type="button" variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="إغلاق"><X className="size-4" /></Button></div><PanelContent {...props} /></aside></div> : null}</>;
   return <aside className="glass flex w-full min-w-0 flex-col overflow-hidden rounded-2xl"><PanelContent {...props} /></aside>;
 }
