@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Crown, Mic2, MoreVertical, Shield, Users, LogIn, LogOut, X } from "lucide-react";
+import { Crown, Mic2, MoreVertical, Shield, Users, LogIn, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,7 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
   const { t } = useI18n();
   const { user } = useAuth();
   const qc = useQueryClient();
-  const presenceById = useMemo(() => new Map(presence.map((entry) => [entry.userId, entry])), [presence]);
+  const presenceById = useMemo(() => new Map(presence.filter((entry) => !entry.userId.startsWith("virtual-")).map((entry) => [entry.userId, entry])), [presence]);
   const virtualMembers = useMemo(() => roomId ? getAiMembersForRoom(roomId, 8).map(virtualProfile) : [], [roomId]);
   const realMemberIds = useMemo(() => members.map((member) => member.id).filter((id) => !id.startsWith("virtual-")), [members]);
   const roomMeta = useQuery({ queryKey: ["room-role-meta", roomId], enabled: Boolean(roomId), staleTime: 30000, queryFn: async () => {
@@ -68,15 +68,15 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
     for (const row of (rolesQuery.data?.vip ?? []) as any[]) if (!map.has(row.user_id)) map.set(row.user_id, "vip");
     return map;
   }, [roomMeta.data, rolesQuery.data]);
-  const speakerById = useMemo(() => new Map((voiceQuery.data ?? []).map((row) => [row.user_id, row])), [voiceQuery.data]);
+  const speakerById = useMemo(() => new Map((voiceQuery.data ?? []).filter((row) => !String(row.user_id).startsWith("virtual-")).map((row) => [row.user_id, row])), [voiceQuery.data]);
   const rows = useMemo<Row[]>(() => {
-    const realRows = members.map((member) => {
+    const realRows = members.filter((member) => !member.id.startsWith("virtual-")).map((member) => {
       const p = presenceById.get(member.id);
       return { id: member.id, name: member.display_name || member.username || "—", avatar: member.avatar_url, status: (p?.status === "online" || p?.status === "away" || p?.status === "offline" ? p.status : "offline") as Row["status"], role: speakerById.has(member.id) ? "speaker" : (roleById.get(member.id) ?? "member"), speaking: speakerById.has(member.id) };
     });
     const realIds = new Set(realRows.map((row) => row.id));
-    const liveOnlyRows = presence.filter((entry) => !realIds.has(entry.userId)).map((entry) => ({ id: entry.userId, name: entry.displayName || "عضو", avatar: entry.avatarUrl, status: entry.status as Row["status"], role: "member" as const, speaking: false }));
-    const merged = [...realRows, ...liveOnlyRows.filter((row) => !realIds.has(row.id))];
+    const liveOnlyRows = presence.filter((entry) => !entry.userId.startsWith("virtual-") && !realIds.has(entry.userId)).map((entry) => ({ id: entry.userId, name: entry.displayName || "عضو", avatar: entry.avatarUrl, status: entry.status as Row["status"], role: "member" as const, speaking: false }));
+    const merged = [...realRows, ...liveOnlyRows];
     const mergedIds = new Set(merged.map((row) => row.id));
     const aiRows = virtualMembers.filter((member) => !mergedIds.has(member.id)).map((member, index) => ({ id: member.id, name: member.display_name || member.username || "عضو", avatar: member.avatar_url, status: "online" as const, role: index === 2 || index === 6 ? "vip" as const : "member" as const, speaking: false, virtual: true }));
     return [...merged, ...aiRows];
@@ -110,9 +110,6 @@ export function MembersPanel(props: Props) {
   const [open, setOpen] = useState(false);
   const { t } = useI18n();
   useEffect(() => { const media = window.matchMedia("(max-width: 1023px)"); const sync = () => setIsMobile(media.matches); sync(); media.addEventListener("change", sync); return () => media.removeEventListener("change", sync); }, []);
-  useEffect(() => { if (!isMobile) return; const openMembers = () => setOpen(true); window.addEventListener("diwan:open-members", openMembers); return () => window.removeEventListener("diwan:open-members", openMembers); }, [isMobile]);
-  useEffect(() => { if (!isMobile) return; const title = document.querySelector<HTMLElement>("main header h1"); if (!title) return; const openFromTitle = () => setOpen(true); title.addEventListener("click", openFromTitle); return () => title.removeEventListener("click", openFromTitle); }, [isMobile]);
-  useEffect(() => { if (!open) return; const previous = document.body.style.overflow; document.body.style.overflow = "hidden"; const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); }; window.addEventListener("keydown", onKeyDown); return () => { document.body.style.overflow = previous; window.removeEventListener("keydown", onKeyDown); }; }, [open]);
-  if (isMobile) return <>{open ? <div className="fixed inset-0 z-[70]" role="presentation"><button type="button" className="absolute inset-0 bg-background/60 backdrop-blur-sm" onClick={() => setOpen(false)} aria-label="إغلاق الأعضاء" /><aside className="absolute inset-y-0 end-0 flex w-[min(88vw,22rem)] flex-col overflow-hidden border-s bg-background shadow-2xl" role="dialog" aria-modal="true" aria-label={t.chat.members}><div className="flex shrink-0 items-center justify-between border-b p-2"><span className="px-2 text-xs font-semibold text-muted-foreground">{t.chat.members}</span><Button type="button" variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="إغلاق"><X className="size-4" /></Button></div><PanelContent {...props} /></aside></div> : null}</>;
-  return <aside className="glass flex w-full min-w-0 flex-col overflow-hidden rounded-2xl"><PanelContent {...props} /></aside>;
+  if (isMobile) return <><Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setOpen(true)}><Users className="size-4" />{t.chat.members}</Button>{open ? <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm" onClick={() => setOpen(false)}><div className="absolute inset-y-0 end-0 flex w-[min(92vw,380px)] flex-col bg-background shadow-2xl" onClick={(event) => event.stopPropagation()}><Button type="button" variant="ghost" size="icon" className="absolute start-2 top-2 z-10" onClick={() => setOpen(false)} aria-label="إغلاق">×</Button><PanelContent {...props} /></div></div> : null}</>;
+  return <PanelContent {...props} />;
 }
