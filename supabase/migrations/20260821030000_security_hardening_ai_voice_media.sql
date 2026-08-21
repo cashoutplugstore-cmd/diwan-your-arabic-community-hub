@@ -1,5 +1,31 @@
 -- Security hardening for AI, voice moderation, and private media authorization.
 
+create table if not exists public.ai_bots (
+  id uuid primary key default gen_random_uuid(),
+  auth_user_id uuid not null unique references auth.users(id) on delete cascade,
+  username text not null unique,
+  display_name text not null,
+  enabled boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+grant select on public.ai_bots to authenticated;
+grant all on public.ai_bots to service_role;
+alter table public.ai_bots enable row level security;
+
+drop policy if exists ai_bots_read_enabled on public.ai_bots;
+create policy ai_bots_read_enabled on public.ai_bots
+for select to authenticated using (enabled = true);
+
+-- Register existing explicitly-marked AI profiles so the Edge Function no longer needs
+-- to enumerate the entire Auth user list on every request.
+insert into public.ai_bots(auth_user_id, username, display_name)
+select p.id, p.username, coalesce(p.display_name, p.username)
+from public.profiles p
+where p.username like 'ai_%'
+  and p.bio = 'مساعد ذكاء اصطناعي معلن في ديوان'
+on conflict (auth_user_id) do nothing;
+
 create table if not exists public.ai_request_limits (
   user_id uuid primary key references auth.users(id) on delete cascade,
   window_started_at timestamptz not null default now(),
@@ -170,14 +196,16 @@ create trigger index_private_chat_media
 after insert or update of content on public.messages
 for each row execute function public.index_private_chat_media();
 
--- Backfill existing private media messages that already use the JSON payload format.
+-- Backfill existing private media messages without forcing a JSON cast on non-JSON messages.
 insert into public.chat_media(message_id, room_id, uploader_id, storage_path, media_type, mime_type, original_name, size_bytes)
 select m.id, m.room_id, m.user_id,
        j.p->>'path', j.p->>'type', nullif(j.p->>'mime',''), nullif(j.p->>'name',''), nullif(j.p->>'size','')::bigint
 from public.messages m
 join public.rooms r on r.id = m.room_id and r.is_private = true
-cross join lateral (select m.content::jsonb as p) j
-where m.content ~ '^\\s*\\{'
+cross join lateral (
+  select case when m.content ~ '^\\s*\\{' then m.content::jsonb end as p
+) j
+where j.p is not null
   and j.p ? 'path' and j.p ? 'type'
   and j.p->>'type' in ('image','audio')
 on conflict (message_id) do nothing;
