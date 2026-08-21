@@ -19,7 +19,24 @@ const recentAiTexts = new Map<string, string[]>();
 
 function roomKey(roomId: string): string { const value = roomId.toLowerCase(); if (/helsinki|هلسنكي/.test(value)) return "helsinki"; if (/finland|فنلندا/.test(value)) return "finland"; if (/iraq|العراق|عراق/.test(value)) return "iraq"; if (/student|طلاب|دراسة|جامعة/.test(value)) return "students"; if (/friend|تعرف|سوالف/.test(value)) return "friends"; return "general"; }
 function authorFor(roomId: string, salt = 0): Profile { const hash = [...roomId].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, (2166136261 ^ salt) >>> 0); return DEMO_PROFILES[hash % DEMO_PROFILES.length]!; }
-function aiAuthor(roomId: string, salt = 0) { const cursor = memberCursor.get(roomId) ?? 0; const member = aiMembers[(cursor + salt) % aiMembers.length]!; memberCursor.set(roomId, cursor + 1); const fallback = authorFor(roomId, cursor + salt); return { member, author: { ...fallback, id: fallback.id ?? `demo-${roomId}-${cursor + salt}`, display_name: member.name, username: member.name.toLowerCase() } as Profile }; }
+
+// AI members are virtual profiles, so their stable identity must be the same
+// everywhere: room member list, messages, and /profile/$userId.
+function aiAuthor(roomId: string, salt = 0) {
+  const cursor = memberCursor.get(roomId) ?? 0;
+  const member = aiMembers[(cursor + salt) % aiMembers.length]!;
+  memberCursor.set(roomId, cursor + 1);
+  const fallback = authorFor(roomId, cursor + salt);
+  const author = {
+    ...fallback,
+    id: member.id,
+    display_name: member.name,
+    username: `${member.name.toLowerCase().replace(/[^\u0600-\u06FFa-z0-9]+/gi, "-")}-${member.id.split("-").pop()}`,
+    avatar_url: null,
+    bio: `${member.personality}. يحب السوالف عن ${member.topics.join("، ")}.`,
+  } as Profile;
+  return { member, author };
+}
 function makeMessage(roomId: string, author: Profile, text: string, at: number, prefix: string): MessageWithAuthor { return { id: `${prefix}-${roomId}-${at}-${author.id}`, room_id: roomId, user_id: author.id!, content: text, created_at: new Date(at).toISOString(), reply_to_id: null, edited_at: null, is_deleted: false, author }; }
 function normalize(text: string) { return text.toLowerCase().replace(/[\u064B-\u065F\u0670]/g, '').replace(/[؟?!.,،؛:()[\]{}]/g, ' ').replace(/\s+/g, ' ').trim(); }
 function tokens(text: string) { return new Set(normalize(text).split(' ').filter((word) => word.length > 2)); }
