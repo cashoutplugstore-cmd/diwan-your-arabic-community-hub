@@ -2,6 +2,7 @@ import * as React from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { ChatRoomPage } from "@/pages/ChatPage";
 import { PrivateChatPage } from "@/pages/PrivateChatPage";
+import { AmbientAIRoomActivity } from "@/components/chat/AmbientAIRoomActivity";
 import { supabase } from "@/integrations/supabase/client";
 
 const title = "المحادثة | ديوان";
@@ -21,19 +22,25 @@ export const Route = createFileRoute("/_authenticated/chat/$slug")({
 
 function ChatRoomRoute() {
   const { slug } = Route.useParams();
-  const [isPrivate, setIsPrivate] = React.useState<boolean | null>(null);
+  const [room, setRoom] = React.useState<{ id: string; is_private: boolean } | null>(null);
 
   React.useEffect(() => {
     let active = true;
-    void supabase.from("rooms").select("is_private").eq("slug", slug).maybeSingle().then(({ data }) => {
-      if (active) setIsPrivate(data?.is_private === true);
+    void supabase.from("rooms").select("id,is_private").eq("slug", slug).maybeSingle().then(({ data }) => {
+      if (active) setRoom(data ? { id: data.id, is_private: data.is_private === true } : null);
     });
     return () => { active = false; };
   }, [slug]);
 
-  if (isPrivate === true) return <PrivateChatPage slug={slug} />;
-  if (isPrivate === false) return <ChatRoomPage slug={slug} />;
-  return null;
+  if (!room) return null;
+  if (room.is_private) return <PrivateChatPage slug={slug} />;
+
+  return (
+    <>
+      <AmbientAIRoomActivity roomId={room.id} />
+      <ChatRoomPage slug={slug} />
+    </>
+  );
 }
 
 // Public rooms and private DMs intentionally use separate UIs.
