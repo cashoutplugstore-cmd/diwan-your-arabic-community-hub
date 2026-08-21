@@ -20,7 +20,6 @@ export async function fetchMessagePage(roomId: string, before?: string | null): 
   const authorIds = [...new Set(realRows.map((m) => m.user_id))];
   const { data: profiles } = authorIds.length ? await supabase.from("profiles").select("*").in("id", authorIds) : { data: [] as Profile[] };
   const byId = new Map((profiles ?? []).map((p) => [p.id, p]));
-
   if (!before) {
     const { data: session } = await supabase.auth.getSession();
     if (session.session?.user?.id) {
@@ -28,7 +27,6 @@ export async function fetchMessagePage(roomId: string, before?: string | null): 
       if (room?.is_private === true) void (supabase as any).rpc("mark_private_chat_read", { _room_id: roomId });
     }
   }
-
   return realRows.map((m) => ({ ...m, author: byId.get(m.user_id) ?? null, is_deleted: Boolean(m.is_deleted) }));
 }
 
@@ -53,21 +51,12 @@ function dialectForCountry(countryCode: string | null | undefined) {
 async function aiMemberFor(roomId: string, salt: number): Promise<{ member: typeof aiMembers[number]; author: Profile }> {
   const { data: room } = await supabase.from("rooms").select("country_code, slug, name").eq("id", roomId).maybeSingle();
   const dialect = dialectForCountry(room?.country_code) ?? dialectForCountry(`${room?.slug ?? ''} ${room?.name ?? ''}`);
-  const pool = (dialect ? aiMembers.filter((member) => member.dialect === dialect) : aiMembers);
+  const pool = dialect ? aiMembers.filter((member) => member.dialect === dialect) : aiMembers;
   const cursor = aiCursorByRoom.get(roomId) ?? 0;
   const start = (hashRoom(roomId) + cursor + salt - 1) % Math.max(pool.length, 1);
   aiCursorByRoom.set(roomId, cursor + 1);
   const member = pool[start] ?? aiMembers[(hashRoom(roomId) + salt) % aiMembers.length]!;
-  const author = {
-    id: member.id,
-    display_name: member.name,
-    username: member.id,
-    avatar_url: null,
-    bio: member.personality,
-    status: "online",
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  } as Profile;
+  const author = { id: member.id, display_name: member.name, username: member.id, avatar_url: null, bio: member.personality, status: "online", created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as Profile;
   return { member, author };
 }
 
@@ -90,21 +79,28 @@ function uniqueAIContent(roomId: string, candidate: string, salt: number, source
   return normalized || "إي والله 😄";
 }
 
+function fallbackReply(author: Profile, roomId: string, message: string, salt: number, createdAt: number, member: typeof aiMembers[number]): MessageWithAuthor {
+  const conversation = buildAiConversation(member, recentAIContent.get(roomId) ?? [], message);
+  const content = uniqueAIContent(roomId, conversation.text, salt, message);
+  return {
+    id: `virtual-message-${roomId}-${createdAt}-${salt}`,
+    room_id: roomId,
+    user_id: member.id,
+    content,
+    created_at: new Date(createdAt).toISOString(),
+    reply_to_id: null,
+    edited_at: null,
+    is_deleted: false,
+    author,
+  } as MessageWithAuthor;
+}
+
 async function requestAIRoomReply(roomId: string, message: string, salt: number, createdAt: number, onReply?: AIReplyHandler) {
   const { member, author } = await aiMemberFor(roomId, salt);
   try {
     const recent = (recentAIContent.get(roomId) ?? []).slice(-6);
     const { data, error } = await supabase.functions.invoke("diwan-ai-room", {
-      body: {
-        roomId,
-        roomName: roomId,
-        message,
-        language: "ar",
-        persona: `${member.name} — ${member.personality}`,
-        recentReplies: recent,
-        topics: member.topics,
-        instruction: `أنت ${member.name}، شخصية ${member.personality}. شارك في حوار عربي طبيعي وخفيف بلهجة ${member.dialect}. اهتم بمواضيعك: ${member.topics.join(", ")}. لا تكرر كلاماً سابقاً ولا تتحدث كروبوت. لا ترد إلا برد قصير ومناسب للسياق.`,
-      },
+      body: { roomId, roomName: roomId, message, language: "ar", persona: `${member.name} — ${member.personality}`, recentReplies: recent, topics: member.topics, instruction: `أنت ${member.name}، شخصية ${member.personality}. شارك في حوار عربي طبيعي وخفيف بلهجة ${member.dialect}. اهتم بمواضيعك: ${member.topics.join(", ")}. لا تكرر كلاماً سابقاً ولا تتحدث كروبوت. لا ترد إلا برد قصير ومناسب للسياق.` },
     });
     if (!error && data?.message && onReply) {
       const content = uniqueAIContent(roomId, String(data.message.content ?? data.text ?? ""), salt, message);
@@ -119,13 +115,11 @@ export function triggerAIRoomReplies(input: { roomId: string; messageId: string;
   if (!input.onReply || !input.message.trim()) return;
   const key = `${input.roomId}:${input.messageId}`;
   if (scheduledAIByMessage.has(key)) return;
-
   const now = Date.now();
   const lastReplyAt = lastAIReplyAtByRoom.get(input.roomId) ?? 0;
   if (now - lastReplyAt < AI_ROOM_COOLDOWN_MS) return;
   lastAIReplyAtByRoom.set(input.roomId, now);
   scheduledAIByMessage.add(key);
-
   const delay = 1800 + Math.floor(Math.random() * 2200);
   window.setTimeout(() => {
     void requestAIRoomReply(input.roomId, input.message, 1, Date.now(), input.onReply);
