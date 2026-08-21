@@ -34,7 +34,7 @@ export function VoiceRoomDock({ roomName }: { roomName?: string }) {
     if (!roomId) return;
     let active = true;
     async function loadParticipants() {
-      const { data } = await supabase.from("room_voice_participants").select("user_id,is_speaker,is_muted").eq("room_id", roomId!).eq("is_speaker", true);
+      const { data } = await supabase.from("room_voice_participants").select("user_id,is_speaker,is_muted").eq("room_id", roomId).eq("is_speaker", true);
       const ids = (data ?? []).map((row) => row.user_id);
       if (!ids.length) { if (active) setParticipants([]); return; }
       const { data: profiles } = await supabase.from("profiles").select("id,display_name,username").in("id", ids);
@@ -46,51 +46,61 @@ export function VoiceRoomDock({ roomName }: { roomName?: string }) {
     return () => { active = false; void supabase.removeChannel(channel); };
   }, [roomId]);
 
-  async function setVoiceState(speaker: boolean, muted = false) {
-    if (!user || !roomId) return;
-    if (!speaker) {
-      await supabase.from("room_voice_participants").delete().eq("room_id", roomId).eq("user_id", user.id);
-      return;
-    }
-    await supabase.from("room_voice_participants").upsert({ room_id: roomId, user_id: user.id, is_speaker: true, is_muted: muted, updated_at: new Date().toISOString() }, { onConflict: "room_id,user_id" });
+  async function joinVoice() {
+    if (!user || !roomId) return false;
+    const { error } = await supabase.from("room_voice_participants").insert({ room_id: roomId, user_id: user.id, is_speaker: true, is_muted: false, updated_at: new Date().toISOString() });
+    return !error;
+  }
+
+  async function leaveVoiceState() {
+    if (!roomId) return;
+    const { error } = await supabase.rpc("voice_leave", { _room_id: roomId });
+    if (!error) setMicOn(false);
+  }
+
+  async function setSelfMuted(muted: boolean) {
+    if (!roomId) return;
+    const { error } = await supabase.rpc("voice_set_self_muted", { _room_id: roomId, _muted: muted });
+    if (!error) setSpeakerOn(!muted);
   }
 
   useEffect(() => () => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     if (mediaUrl) URL.revokeObjectURL(mediaUrl);
     audioRef.current?.pause();
-    if (user && roomId) void supabase.from("room_voice_participants").delete().eq("room_id", roomId).eq("user_id", user.id);
-  }, [mediaUrl, user, roomId]);
+    if (roomId) void supabase.rpc("voice_leave", { _room_id: roomId });
+  }, [mediaUrl, roomId]);
 
   async function toggleMic() {
     if (micOn) {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
-      setMicOn(false);
-      await setVoiceState(false);
+      await leaveVoiceState();
       return;
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const joined = await joinVoice();
+      if (!joined) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       streamRef.current = stream;
       setMicOn(true);
-      await setVoiceState(true, false);
+      setSpeakerOn(true);
     } catch {
       setMicOn(false);
     }
   }
 
   async function toggleMute() {
-    const next = !speakerOn;
-    setSpeakerOn(!next);
-    if (user && roomId) await setVoiceState(true, next);
+    await setSelfMuted(speakerOn);
   }
 
   async function leaveVoice() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
-    setMicOn(false);
-    await setVoiceState(false);
+    await leaveVoiceState();
   }
 
   function chooseMusic(file: File | undefined) {
