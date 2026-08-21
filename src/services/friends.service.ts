@@ -22,11 +22,16 @@ export async function fetchFriendships(userId: string): Promise<FriendshipWithPr
   }));
 }
 
-export async function fetchFriendshipBetween(userId: string, targetId: string): Promise<Friendship | null> {
+export async function fetchFriendshipBetween(
+  userId: string,
+  targetId: string,
+): Promise<Friendship | null> {
   const { data, error } = await supabase
     .from("friendships")
     .select("*")
-    .or(`and(requester_id.eq.${userId},addressee_id.eq.${targetId}),and(requester_id.eq.${targetId},addressee_id.eq.${userId})`)
+    .or(
+      `and(requester_id.eq.${userId},addressee_id.eq.${targetId}),and(requester_id.eq.${targetId},addressee_id.eq.${userId})`,
+    )
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();

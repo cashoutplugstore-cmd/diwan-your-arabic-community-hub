@@ -1,4 +1,15 @@
-import { Bell, Compass, Crown, Home, MessagesSquare, Search, Settings, Shield, User, Users } from "lucide-react";
+import {
+  Bell,
+  Compass,
+  Crown,
+  Home,
+  MessagesSquare,
+  Search,
+  Settings,
+  Shield,
+  User,
+  Users,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 

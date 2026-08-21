@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 export type SoundKind = "message" | "notification" | "mention";
 export type SoundSettings = { master: boolean } & Record<SoundKind, boolean>;
@@ -39,7 +47,9 @@ export function SoundProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const unlock = () => {
       unlockedRef.current = true;
-      const AudioCtor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      const AudioCtor =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!AudioCtor) return;
       if (!ctxRef.current) ctxRef.current = new AudioCtor();
       void ctxRef.current.resume();
@@ -66,7 +76,8 @@ export function SoundProvider({ children }: { children: ReactNode }) {
     (kind: SoundKind) => {
       if (!settings.master || !settings[kind]) return;
       if (!unlockedRef.current || !ctxRef.current) return;
-      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches && kind === "message") return;
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches && kind === "message")
+        return;
       const ctx = ctxRef.current;
       const tone = TONES[kind];
       const now = ctx.currentTime;
@@ -85,7 +96,9 @@ export function SoundProvider({ children }: { children: ReactNode }) {
     [settings],
   );
 
-  return <SoundContext.Provider value={{ settings, setSetting, play }}>{children}</SoundContext.Provider>;
+  return (
+    <SoundContext.Provider value={{ settings, setSetting, play }}>{children}</SoundContext.Provider>
+  );
 }
 
 export function useSounds() {

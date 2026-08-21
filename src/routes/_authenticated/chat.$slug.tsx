@@ -25,10 +25,17 @@ function ChatRoomRoute() {
 
   React.useEffect(() => {
     let active = true;
-    void supabase.from("rooms").select("is_private").eq("slug", slug).maybeSingle().then(({ data }) => {
-      if (active) setIsPrivate(data?.is_private === true);
-    });
-    return () => { active = false; };
+    void supabase
+      .from("rooms")
+      .select("is_private")
+      .eq("slug", slug)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (active) setIsPrivate(data?.is_private === true);
+      });
+    return () => {
+      active = false;
+    };
   }, [slug]);
 
   if (isPrivate === true) return <PrivateChatPage slug={slug} />;

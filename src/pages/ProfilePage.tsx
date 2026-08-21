@@ -91,7 +91,14 @@ export function ProfilePage() {
 
   if (profile.isLoading) return <ListSkeleton rows={3} />;
   const role = identity.data?.role;
-  const avatarRole = role === "admin" ? "admin" : role === "moderator" ? "moderator" : identity.data?.isVip ? "vip" : null;
+  const avatarRole =
+    role === "admin"
+      ? "admin"
+      : role === "moderator"
+        ? "moderator"
+        : identity.data?.isVip
+          ? "vip"
+          : null;
 
   return (
     <div className="space-y-6">
@@ -105,14 +112,35 @@ export function ProfilePage() {
       >
         <div className="sticky top-2 z-20 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-white/10 bg-background/90 p-2 shadow-lg backdrop-blur-xl">
           <div className="flex items-center gap-1.5" role="group" aria-label="الجنس">
-            <Button type="button" size="sm" variant={gender === "male" ? "default" : "outline"} className="h-8 px-2.5 text-xs" onClick={() => setGender("male")} aria-pressed={gender === "male"}>
-              <VenusAndMars className="me-1 size-3.5" />ذكر
+            <Button
+              type="button"
+              size="sm"
+              variant={gender === "male" ? "default" : "outline"}
+              className="h-8 px-2.5 text-xs"
+              onClick={() => setGender("male")}
+              aria-pressed={gender === "male"}
+            >
+              <VenusAndMars className="me-1 size-3.5" />
+              ذكر
             </Button>
-            <Button type="button" size="sm" variant={gender === "female" ? "default" : "outline"} className="h-8 px-2.5 text-xs" onClick={() => setGender("female")} aria-pressed={gender === "female"}>
-              <VenusAndMars className="me-1 size-3.5" />أنثى
+            <Button
+              type="button"
+              size="sm"
+              variant={gender === "female" ? "default" : "outline"}
+              className="h-8 px-2.5 text-xs"
+              onClick={() => setGender("female")}
+              aria-pressed={gender === "female"}
+            >
+              <VenusAndMars className="me-1 size-3.5" />
+              أنثى
             </Button>
           </div>
-          <Button type="submit" size="sm" className="h-9 min-w-36" disabled={save.isPending || !user}>
+          <Button
+            type="submit"
+            size="sm"
+            className="h-9 min-w-36"
+            disabled={save.isPending || !user}
+          >
             {save.isPending ? "جارٍ الحفظ..." : "حفظ التغييرات"}
             <Sparkles className="ms-2 size-3.5" />
           </Button>
@@ -122,17 +150,47 @@ export function ProfilePage() {
           <div className="pointer-events-none absolute -end-20 -top-20 size-56 rounded-full bg-primary/10 blur-3xl" />
           <div className="relative flex flex-col items-center gap-5 text-center sm:flex-row sm:text-start">
             <div className="relative rounded-full bg-gradient-to-br from-primary via-fuchsia-400 to-amber-300 p-1.5 shadow-[0_0_35px_rgba(168,85,247,.25)]">
-              <UserAvatar name={displayName || profile.data?.username || null} src={avatarUrl} size="lg" role={avatarRole} />
+              <UserAvatar
+                name={displayName || profile.data?.username || null}
+                src={avatarUrl}
+                size="lg"
+                role={avatarRole}
+              />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
-                <h1 className={"font-display text-2xl font-black " + (role === "admin" ? "text-amber-300" : role === "moderator" ? "text-sky-300" : identity.data?.isVip ? "text-fuchsia-300" : "")}>
+                <h1
+                  className={
+                    "font-display text-2xl font-black " +
+                    (role === "admin"
+                      ? "text-amber-300"
+                      : role === "moderator"
+                        ? "text-sky-300"
+                        : identity.data?.isVip
+                          ? "text-fuchsia-300"
+                          : "")
+                  }
+                >
                   {displayName || profile.data?.username}
                 </h1>
-                {role === "admin" ? <Badge className="border-amber-400/40 bg-amber-400/15 text-amber-300"><ShieldCheck className="me-1 size-3" />ADMIN</Badge> : role === "moderator" ? <Badge className="border-sky-400/40 bg-sky-400/15 text-sky-300">MOD</Badge> : identity.data?.isVip ? <Badge className="border-fuchsia-400/40 bg-fuchsia-400/15 text-fuchsia-300"><Crown className="me-1 size-3" />VIP</Badge> : null}
+                {role === "admin" ? (
+                  <Badge className="border-amber-400/40 bg-amber-400/15 text-amber-300">
+                    <ShieldCheck className="me-1 size-3" />
+                    ADMIN
+                  </Badge>
+                ) : role === "moderator" ? (
+                  <Badge className="border-sky-400/40 bg-sky-400/15 text-sky-300">MOD</Badge>
+                ) : identity.data?.isVip ? (
+                  <Badge className="border-fuchsia-400/40 bg-fuchsia-400/15 text-fuchsia-300">
+                    <Crown className="me-1 size-3" />
+                    VIP
+                  </Badge>
+                ) : null}
               </div>
               <p className="mt-1 text-sm text-muted-foreground">@{profile.data?.username}</p>
-              <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted-foreground sm:mx-0">{bio || "أضف نبذة جميلة عن نفسك في ديوان ✨"}</p>
+              <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted-foreground sm:mx-0">
+                {bio || "أضف نبذة جميلة عن نفسك في ديوان ✨"}
+              </p>
             </div>
           </div>
         </section>
@@ -140,18 +198,44 @@ export function ProfilePage() {
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="display-name">{t.auth.displayName}</Label>
-            <Input id="display-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoComplete="nickname" />
+            <Input
+              id="display-name"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              autoComplete="nickname"
+            />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="avatar-url"><UserRound className="me-1 inline size-4" />الصورة الشخصية</Label>
-            <Input id="avatar-url" type="url" inputMode="url" placeholder="https://..." dir="ltr" value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} autoComplete="url" aria-describedby="avatar-help" />
-            <p id="avatar-help" className="text-xs text-muted-foreground">أدخل رابط صورة مباشر يبدأ بـ https://</p>
+            <Label htmlFor="avatar-url">
+              <UserRound className="me-1 inline size-4" />
+              الصورة الشخصية
+            </Label>
+            <Input
+              id="avatar-url"
+              type="url"
+              inputMode="url"
+              placeholder="https://..."
+              dir="ltr"
+              value={avatarUrl}
+              onChange={(e) => setAvatarUrl(e.target.value)}
+              autoComplete="url"
+              aria-describedby="avatar-help"
+            />
+            <p id="avatar-help" className="text-xs text-muted-foreground">
+              أدخل رابط صورة مباشر يبدأ بـ https://
+            </p>
           </div>
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="bio">Bio</Label>
-          <Textarea id="bio" value={bio} onChange={(e) => setBio(e.target.value)} className="min-h-28" maxLength={500} />
+          <Textarea
+            id="bio"
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
+            className="min-h-28"
+            maxLength={500}
+          />
           <p className="text-end text-xs text-muted-foreground">{bio.length}/500</p>
         </div>
       </form>

@@ -20,12 +20,30 @@ export function NotificationsPage() {
     if (!user?.id) return;
     const channel = supabase
       .channel(`notifications-${user.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` }, () => {
-        void queryClient.invalidateQueries({ queryKey: ["notifications", user.id] });
-      })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` }, () => {
-        void queryClient.invalidateQueries({ queryKey: ["notifications", user.id] });
-      })
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ["notifications", user.id] });
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ["notifications", user.id] });
+        },
+      )
       .subscribe();
 
     return () => {
@@ -36,9 +54,8 @@ export function NotificationsPage() {
   const markRead = useMutation({
     mutationFn: (id: string) => markNotificationRead(id),
     onSuccess: (_, id) => {
-      queryClient.setQueryData(
-        ["notifications", user?.id],
-        (current: typeof notifications.data) => current?.map((item) => item.id === id ? { ...item, is_read: true } : item),
+      queryClient.setQueryData(["notifications", user?.id], (current: typeof notifications.data) =>
+        current?.map((item) => (item.id === id ? { ...item, is_read: true } : item)),
       );
     },
   });
@@ -62,7 +79,13 @@ export function NotificationsPage() {
                 <p className="truncate text-sm text-muted-foreground">{item.body ?? "—"}</p>
               </div>
               {!item.is_read ? (
-                <Button size="sm" variant="ghost" onClick={() => markRead.mutate(item.id)} disabled={markRead.isPending} aria-label={t.nav.notifications}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => markRead.mutate(item.id)}
+                  disabled={markRead.isPending}
+                  aria-label={t.nav.notifications}
+                >
                   ✓
                 </Button>
               ) : null}

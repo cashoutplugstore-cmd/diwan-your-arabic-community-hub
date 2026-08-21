@@ -149,9 +149,9 @@ function RootComponent() {
         <I18nProvider>
           <AuthProvider>
             <SoundProvider>
-            {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-            <Outlet />
-            <Toaster position="top-center" richColors />
+              {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+              <Outlet />
+              <Toaster position="top-center" richColors />
             </SoundProvider>
           </AuthProvider>
         </I18nProvider>

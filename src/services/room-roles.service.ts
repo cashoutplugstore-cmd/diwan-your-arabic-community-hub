@@ -19,15 +19,30 @@ export type RoomPermissions = {
 };
 
 export const EMPTY_PERMISSIONS: RoomPermissions = {
-  role: null, isOwner: false, isGlobalAdmin: false, isRoomModerator: false,
-  canManageRoles: false, canModerate: false, canMute: false, canBan: false, canDeleteMessages: false,
+  role: null,
+  isOwner: false,
+  isGlobalAdmin: false,
+  isRoomModerator: false,
+  canManageRoles: false,
+  canModerate: false,
+  canMute: false,
+  canBan: false,
+  canDeleteMessages: false,
 };
 
 /** Real permission resolution for a room, derived from Supabase (never mocked). */
-export async function fetchRoomPermissions(roomId: string, userId: string): Promise<RoomPermissions> {
+export async function fetchRoomPermissions(
+  roomId: string,
+  userId: string,
+): Promise<RoomPermissions> {
   const [{ data: room }, { data: membership }, { data: globalRoles }] = await Promise.all([
     supabase.from("rooms").select("owner_id").eq("id", roomId).maybeSingle(),
-    supabase.from("room_members").select("role").eq("room_id", roomId).eq("user_id", userId).maybeSingle(),
+    supabase
+      .from("room_members")
+      .select("role")
+      .eq("room_id", roomId)
+      .eq("user_id", userId)
+      .maybeSingle(),
     supabase.from("user_roles").select("role").eq("user_id", userId),
   ]);
   const isOwner = room?.owner_id === userId;
@@ -40,9 +55,14 @@ export async function fetchRoomPermissions(roomId: string, userId: string): Prom
   const canModerate = canManageRoles || isGlobalModerator || isRoomModerator;
   return {
     role: isOwner ? "owner" : memberRole,
-    isOwner, isGlobalAdmin, isRoomModerator,
-    canManageRoles, canModerate,
-    canMute: canModerate, canBan: canModerate, canDeleteMessages: canModerate,
+    isOwner,
+    isGlobalAdmin,
+    isRoomModerator,
+    canManageRoles,
+    canModerate,
+    canMute: canModerate,
+    canBan: canModerate,
+    canDeleteMessages: canModerate,
   };
 }
 
@@ -55,14 +75,22 @@ export const roomPermissionsQuery = (roomId: string | undefined, userId: string 
   });
 
 export async function fetchRoomMemberRoles(roomId: string): Promise<RoomMemberRow[]> {
-  const { data, error } = await supabase.from("room_members").select("user_id,role").eq("room_id", roomId).limit(300);
+  const { data, error } = await supabase
+    .from("room_members")
+    .select("user_id,role")
+    .eq("room_id", roomId)
+    .limit(300);
   if (error) throw error;
   const rows = data ?? [];
   const ids = rows.map((r) => r.user_id);
   if (ids.length === 0) return [];
   const { data: profiles } = await supabase.from("profiles").select("*").in("id", ids);
   const byId = new Map((profiles ?? []).map((p) => [p.id, p]));
-  return rows.map((r) => ({ userId: r.user_id, role: (r.role as RoomRole) ?? "member", profile: byId.get(r.user_id) ?? null }));
+  return rows.map((r) => ({
+    userId: r.user_id,
+    role: (r.role as RoomRole) ?? "member",
+    profile: byId.get(r.user_id) ?? null,
+  }));
 }
 
 export const roomMemberRolesQuery = (roomId: string | undefined) =>
@@ -73,7 +101,15 @@ export const roomMemberRolesQuery = (roomId: string | undefined) =>
   });
 
 /** Persists a room rank change. RLS allows this only for the room owner or a platform admin. */
-export async function setRoomMemberRole(roomId: string, userId: string, role: Exclude<RoomRole, "owner">) {
-  const { error } = await supabase.from("room_members").update({ role }).eq("room_id", roomId).eq("user_id", userId);
+export async function setRoomMemberRole(
+  roomId: string,
+  userId: string,
+  role: Exclude<RoomRole, "owner">,
+) {
+  const { error } = await supabase
+    .from("room_members")
+    .update({ role })
+    .eq("room_id", roomId)
+    .eq("user_id", userId);
   if (error) throw error;
 }

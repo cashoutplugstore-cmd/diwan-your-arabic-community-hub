@@ -23,8 +23,7 @@ export function FriendsPage() {
   const queryClient = useQueryClient();
   const friendships = useQuery(friendshipsQuery(user?.id));
 
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: ["friendships", user?.id] });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["friendships", user?.id] });
 
   const accept = useMutation({
     mutationFn: (id: string) => respondToRequest(id, "accepted"),

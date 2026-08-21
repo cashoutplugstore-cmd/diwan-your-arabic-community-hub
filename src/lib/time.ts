@@ -15,7 +15,8 @@ export function relativeTime(date: string | Date | null | undefined, locale: Loc
   const formatter = new Intl.RelativeTimeFormat(locale === "ar" ? "ar" : "en", { numeric: "auto" });
   let duration = (new Date(date).getTime() - Date.now()) / 1000;
   for (const division of DIVISIONS) {
-    if (Math.abs(duration) < division.amount) return formatter.format(Math.round(duration), division.unit);
+    if (Math.abs(duration) < division.amount)
+      return formatter.format(Math.round(duration), division.unit);
     duration /= division.amount;
   }
   return "—";
@@ -32,7 +33,11 @@ export function dayKey(date: string | Date): string {
   return new Date(date).toDateString();
 }
 
-export function dayLabel(date: string | Date, locale: Locale, t: { today: string; yesterday: string }): string {
+export function dayLabel(
+  date: string | Date,
+  locale: Locale,
+  t: { today: string; yesterday: string },
+): string {
   const key = dayKey(date);
   if (key === new Date().toDateString()) return t.today;
   const yesterday = new Date();

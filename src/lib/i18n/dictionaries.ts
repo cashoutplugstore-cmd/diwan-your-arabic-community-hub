@@ -1,7 +1,21 @@
 export type Dictionary = {
   brand: string;
   tagline: string;
-  nav: Record<"home"|"rooms"|"chat"|"friends"|"profile"|"settings"|"notifications"|"search"|"admin"|"login"|"register"|"logout", string>;
+  nav: Record<
+    | "home"
+    | "rooms"
+    | "chat"
+    | "friends"
+    | "profile"
+    | "settings"
+    | "notifications"
+    | "search"
+    | "admin"
+    | "login"
+    | "register"
+    | "logout",
+    string
+  >;
   home: {
     heroTitle: string;
     heroSubtitle: string;
@@ -10,13 +24,142 @@ export type Dictionary = {
     featuresTitle: string;
     features: { title: string; desc: string }[];
   };
-  auth: Record<"loginTitle"|"loginSubtitle"|"registerTitle"|"registerSubtitle"|"email"|"password"|"username"|"displayName"|"submitLogin"|"submitRegister"|"google"|"noAccount"|"hasAccount"|"checkEmail", string>;
-  common: Record<"loading"|"send"|"save"|"cancel"|"create"|"join"|"leave"|"searchPlaceholder"|"messagePlaceholder"|"empty"|"error"|"language"|"theme"|"dark"|"light", string>;
-  communities: Record<"title"|"subtitle"|"arab"|"europe"|"countries"|"cities"|"rooms"|"members"|"messages"|"lastActivity"|"searchRooms"|"noResults"|"active"|"official"|"enter"|"backToCountries"|"allRegions"|"recent", string>;
-  chat: Record<"online"|"members"|"reply"|"edit"|"delete"|"copy"|"copied"|"deleted"|"edited"|"loadMore"|"jumpToLatest"|"newMessages"|"tooLong"|"tooFast"|"sending"|"muted"|"banned"|"replyingTo"|"cancelReply"|"confirmDelete"|"confirmDeleteDesc"|"today"|"yesterday"|"noMessages"|"startConversation"|"charsLeft", string>;
-  moderation: Record<"report"|"reportTitle"|"reportDesc"|"reason"|"details"|"submit"|"reported"|"block"|"unblock"|"blockTitle"|"blockDesc"|"blocked"|"unblocked"|"ban"|"unban"|"mute"|"unmute"|"banned"|"muted"|"dashboard"|"openReports"|"resolve"|"dismiss"|"resolved"|"dismissed"|"noReports"|"blockedUsers"|"status"|"reasonSpam"|"reasonAbuse"|"reasonHate"|"reasonSexual"|"reasonOther", string>;
-  sounds: Record<"title"|"master"|"message"|"notification"|"mention"|"description", string>;
-  homeDash: Record<"welcome"|"subtitle"|"quickActions"|"activeRooms"|"myRooms"|"explore"|"noMyRooms"|"unread", string>;
+  auth: Record<
+    | "loginTitle"
+    | "loginSubtitle"
+    | "registerTitle"
+    | "registerSubtitle"
+    | "email"
+    | "password"
+    | "username"
+    | "displayName"
+    | "submitLogin"
+    | "submitRegister"
+    | "google"
+    | "noAccount"
+    | "hasAccount"
+    | "checkEmail",
+    string
+  >;
+  common: Record<
+    | "loading"
+    | "send"
+    | "save"
+    | "cancel"
+    | "create"
+    | "join"
+    | "leave"
+    | "searchPlaceholder"
+    | "messagePlaceholder"
+    | "empty"
+    | "error"
+    | "language"
+    | "theme"
+    | "dark"
+    | "light",
+    string
+  >;
+  communities: Record<
+    | "title"
+    | "subtitle"
+    | "arab"
+    | "europe"
+    | "countries"
+    | "cities"
+    | "rooms"
+    | "members"
+    | "messages"
+    | "lastActivity"
+    | "searchRooms"
+    | "noResults"
+    | "active"
+    | "official"
+    | "enter"
+    | "backToCountries"
+    | "allRegions"
+    | "recent",
+    string
+  >;
+  chat: Record<
+    | "online"
+    | "members"
+    | "reply"
+    | "edit"
+    | "delete"
+    | "copy"
+    | "copied"
+    | "deleted"
+    | "edited"
+    | "loadMore"
+    | "jumpToLatest"
+    | "newMessages"
+    | "tooLong"
+    | "tooFast"
+    | "sending"
+    | "muted"
+    | "banned"
+    | "replyingTo"
+    | "cancelReply"
+    | "confirmDelete"
+    | "confirmDeleteDesc"
+    | "today"
+    | "yesterday"
+    | "noMessages"
+    | "startConversation"
+    | "charsLeft",
+    string
+  >;
+  moderation: Record<
+    | "report"
+    | "reportTitle"
+    | "reportDesc"
+    | "reason"
+    | "details"
+    | "submit"
+    | "reported"
+    | "block"
+    | "unblock"
+    | "blockTitle"
+    | "blockDesc"
+    | "blocked"
+    | "unblocked"
+    | "ban"
+    | "unban"
+    | "mute"
+    | "unmute"
+    | "banned"
+    | "muted"
+    | "dashboard"
+    | "openReports"
+    | "resolve"
+    | "dismiss"
+    | "resolved"
+    | "dismissed"
+    | "noReports"
+    | "blockedUsers"
+    | "status"
+    | "reasonSpam"
+    | "reasonAbuse"
+    | "reasonHate"
+    | "reasonSexual"
+    | "reasonOther",
+    string
+  >;
+  sounds: Record<
+    "title" | "master" | "message" | "notification" | "mention" | "description",
+    string
+  >;
+  homeDash: Record<
+    | "welcome"
+    | "subtitle"
+    | "quickActions"
+    | "activeRooms"
+    | "myRooms"
+    | "explore"
+    | "noMyRooms"
+    | "unread",
+    string
+  >;
 };
 
 export const ar: Dictionary = {

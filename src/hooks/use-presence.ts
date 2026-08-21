@@ -2,13 +2,27 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export type PresenceStatus = "online" | "away";
-export type PresenceEntry = { userId: string; status: PresenceStatus; displayName: string; avatarUrl: string | null; onlineAt: string };
-export type PresenceActivity = { id: string; type: "join" | "leave"; displayName: string; at: string };
+export type PresenceEntry = {
+  userId: string;
+  status: PresenceStatus;
+  displayName: string;
+  avatarUrl: string | null;
+  onlineAt: string;
+};
+export type PresenceActivity = {
+  id: string;
+  type: "join" | "leave";
+  displayName: string;
+  at: string;
+};
 
 const AWAY_AFTER_MS = 2 * 60 * 1000;
 const HEARTBEAT_MS = 20_000;
 
-export function useRoomPresence(roomId: string | undefined, me: { userId: string; displayName: string; avatarUrl: string | null } | null) {
+export function useRoomPresence(
+  roomId: string | undefined,
+  me: { userId: string; displayName: string; avatarUrl: string | null } | null,
+) {
   const [entries, setEntries] = useState<PresenceEntry[]>([]);
   const [activity, setActivity] = useState<PresenceActivity[]>([]);
   const previousRef = useRef<Map<string, string>>(new Map());
@@ -23,8 +37,12 @@ export function useRoomPresence(roomId: string | undefined, me: { userId: string
 
     let lastActive = Date.now();
     let disposed = false;
-    const markActive = () => { lastActive = Date.now(); };
-    const markOnline = () => { lastActive = Date.now(); };
+    const markActive = () => {
+      lastActive = Date.now();
+    };
+    const markOnline = () => {
+      lastActive = Date.now();
+    };
 
     window.addEventListener("pointerdown", markActive);
     window.addEventListener("keydown", markActive);
@@ -44,7 +62,10 @@ export function useRoomPresence(roomId: string | undefined, me: { userId: string
       const byUser = new Map<string, PresenceEntry>();
       for (const entry of flat) {
         const existing = byUser.get(entry.userId);
-        if (!existing || new Date(entry.onlineAt).getTime() >= new Date(existing.onlineAt).getTime()) {
+        if (
+          !existing ||
+          new Date(entry.onlineAt).getTime() >= new Date(existing.onlineAt).getTime()
+        ) {
           byUser.set(entry.userId, entry);
         }
       }
@@ -56,19 +77,28 @@ export function useRoomPresence(roomId: string | undefined, me: { userId: string
 
       next.forEach((entry) => {
         if (!previous.has(entry.userId)) {
-          setActivity((items) => [
-            { id: crypto.randomUUID(), type: "join" as const, displayName: entry.displayName, at: now },
-            ...items,
-          ].slice(0, 8));
+          setActivity((items) =>
+            [
+              {
+                id: crypto.randomUUID(),
+                type: "join" as const,
+                displayName: entry.displayName,
+                at: now,
+              },
+              ...items,
+            ].slice(0, 8),
+          );
         }
       });
 
       previous.forEach((displayName, userId) => {
         if (!nextMap.has(userId)) {
-          setActivity((items) => [
-            { id: crypto.randomUUID(), type: "leave" as const, displayName, at: now },
-            ...items,
-          ].slice(0, 8));
+          setActivity((items) =>
+            [
+              { id: crypto.randomUUID(), type: "leave" as const, displayName, at: now },
+              ...items,
+            ].slice(0, 8),
+          );
         }
       });
 
@@ -96,10 +126,12 @@ export function useRoomPresence(roomId: string | undefined, me: { userId: string
 
       // Persist a short-lived heartbeat for room cards/counts and create the
       // durable room_members row through the database trigger on first entry.
-      await supabase.from("room_presence").upsert(
-        { room_id: roomId, user_id: me.userId, last_seen_at: onlineAt },
-        { onConflict: "room_id,user_id" },
-      );
+      await supabase
+        .from("room_presence")
+        .upsert(
+          { room_id: roomId, user_id: me.userId, last_seen_at: onlineAt },
+          { onConflict: "room_id,user_id" },
+        );
       sync();
     };
 

@@ -61,13 +61,18 @@ export function SettingsPage() {
           <h2 className="font-display text-lg font-bold">{t.sounds.title}</h2>
           <p className="text-sm text-muted-foreground">{t.sounds.description}</p>
         </div>
-        {([
-          ["master", t.sounds.master],
-          ["message", t.sounds.message],
-          ["notification", t.sounds.notification],
-          ["mention", t.sounds.mention],
-        ] as const).map(([key, label]) => (
-          <div key={key} className="flex items-center justify-between gap-4 border-t pt-4 first:border-0 first:pt-0">
+        {(
+          [
+            ["master", t.sounds.master],
+            ["message", t.sounds.message],
+            ["notification", t.sounds.notification],
+            ["mention", t.sounds.mention],
+          ] as const
+        ).map(([key, label]) => (
+          <div
+            key={key}
+            className="flex items-center justify-between gap-4 border-t pt-4 first:border-0 first:pt-0"
+          >
             <Label htmlFor={`sound-${key}`}>{label}</Label>
             <Switch
               id={`sound-${key}`}
@@ -87,7 +92,11 @@ export function SettingsPage() {
           <ul className="space-y-2">
             {(blocked.data ?? []).map((profile) => (
               <li key={profile.id} className="flex items-center gap-3 rounded-xl border p-2">
-                <UserAvatar name={profile.display_name || profile.username} src={profile.avatar_url} size="sm" />
+                <UserAvatar
+                  name={profile.display_name || profile.username}
+                  src={profile.avatar_url}
+                  size="sm"
+                />
                 <span className="min-w-0 flex-1 truncate text-sm">
                   {profile.display_name || profile.username}
                 </span>

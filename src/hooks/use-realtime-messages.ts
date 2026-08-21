@@ -28,7 +28,12 @@ export function useRealtimeMessages(roomId: string | undefined, handlers: Handle
       if (!isPrivateRoom) {
         for (const message of buildDemoEntryMessages(roomId)) {
           if (disposed) break;
-          window.setTimeout(() => { if (!disposed) handlersRef.current.onInsert?.(message as Message); }, Math.max(0, new Date(message.created_at).getTime() - Date.now()));
+          window.setTimeout(
+            () => {
+              if (!disposed) handlersRef.current.onInsert?.(message as Message);
+            },
+            Math.max(0, new Date(message.created_at).getTime() - Date.now()),
+          );
         }
         const emitAmbient = () => {
           if (disposed || document.visibilityState !== "visible") return;
@@ -39,9 +44,34 @@ export function useRealtimeMessages(roomId: string | undefined, handlers: Handle
         ambientTimer = window.setTimeout(emitAmbient, 7_000 + Math.floor(Math.random() * 8_000));
       }
 
-      channel = supabase.channel(`room-messages-${roomId}`).on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` }, (payload) => { const message = payload.new as Message; if (currentUserId && message.user_id === currentUserId) return; handlersRef.current.onInsert?.(message); }).on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` }, (payload) => handlersRef.current.onChange?.(payload.new as Message)).on("postgres_changes", { event: "DELETE", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` }, () => void queryClient.invalidateQueries({ queryKey: ["messages", roomId] })).subscribe();
+      channel = supabase
+        .channel(`room-messages-${roomId}`)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` },
+          (payload) => {
+            const message = payload.new as Message;
+            if (currentUserId && message.user_id === currentUserId) return;
+            handlersRef.current.onInsert?.(message);
+          },
+        )
+        .on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` },
+          (payload) => handlersRef.current.onChange?.(payload.new as Message),
+        )
+        .on(
+          "postgres_changes",
+          { event: "DELETE", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` },
+          () => void queryClient.invalidateQueries({ queryKey: ["messages", roomId] }),
+        )
+        .subscribe();
     };
     void start();
-    return () => { disposed = true; if (ambientTimer) window.clearTimeout(ambientTimer); if (channel) void supabase.removeChannel(channel); };
+    return () => {
+      disposed = true;
+      if (ambientTimer) window.clearTimeout(ambientTimer);
+      if (channel) void supabase.removeChannel(channel);
+    };
   }, [roomId, queryClient]);
 }
