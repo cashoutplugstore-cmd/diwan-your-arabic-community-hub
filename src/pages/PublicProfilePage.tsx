@@ -19,14 +19,28 @@ export function PublicProfilePage() {
   const queryClient = useQueryClient();
   const userId = params.userId;
 
+  // AI members have their own profile identity. They must never fall through to
+  // the real Supabase profile queries: their virtual IDs are intentionally not
+  // auth.users IDs. Keeping this branch first also avoids the profile-page
+  // loading state for virtual members.
   const aiBot = aiMembers.find((member) => member.id === userId);
-  const demoMember = DEMO_PROFILES.find((member) => member.id === userId);
-  const bot = aiBot ?? (demoMember ? { id: demoMember.id, name: demoMember.display_name || demoMember.username, avatar: "🤖", personality: "عضو من مجتمع ديوان", topics: ["السوالف", "المجتمع", "الدردشة"] } : null);
+  const isAiMember = Boolean(aiBot);
+  const demoMember = !isAiMember ? DEMO_PROFILES.find((member) => member.id === userId) : undefined;
+  const bot = aiBot
+    ? {
+        id: aiBot.id,
+        name: aiBot.name,
+        avatar: aiBot.avatar,
+        personality: aiBot.personality,
+        topics: aiBot.topics,
+        bio: `${aiBot.personality}. يحب السوالف عن ${aiBot.topics.join("، ")}.`,
+      }
+    : null;
   const isSelf = Boolean(user?.id && user.id === userId);
 
   const profile = useQuery({
     queryKey: ["public-profile", userId],
-    enabled: Boolean(userId) && !bot,
+    enabled: Boolean(userId) && !isAiMember,
     queryFn: async () => {
       const { data, error } = await supabase.from("profiles").select("id,username,display_name,avatar_url,bio").eq("id", userId!).maybeSingle();
       if (error) throw error;
@@ -36,7 +50,7 @@ export function PublicProfilePage() {
 
   const identity = useQuery({
     queryKey: ["public-profile-identity", userId],
-    enabled: Boolean(userId) && !bot,
+    enabled: Boolean(userId) && !isAiMember,
     queryFn: async () => {
       const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId!);
       return { role: data?.some((r) => r.role === "admin") ? "admin" : data?.some((r) => r.role === "moderator") ? "moderator" : null };
@@ -45,7 +59,7 @@ export function PublicProfilePage() {
 
   const friendship = useQuery({
     queryKey: ["friendship-between", user?.id, userId],
-    enabled: Boolean(user?.id && userId && !bot && !isSelf),
+    enabled: Boolean(user?.id && userId && !isAiMember && !isSelf),
     queryFn: () => fetchFriendshipBetween(user!.id, userId!),
   });
 
@@ -67,10 +81,20 @@ export function PublicProfilePage() {
           <div className="pointer-events-none absolute -end-20 -top-20 size-56 rounded-full bg-fuchsia-400/10 blur-3xl" />
           <div className="relative flex flex-col items-center gap-4 text-center">
             <div className="grid size-28 place-items-center rounded-full border-4 border-fuchsia-400/40 bg-secondary text-6xl shadow-xl">{bot.avatar}</div>
-            <div><h1 className="font-display text-2xl font-black">{bot.name}</h1><p className="mt-1 text-sm text-muted-foreground">@ai_bot</p></div>
-            <Badge variant="secondary">BOT</Badge>
-            <div className="w-full rounded-2xl border bg-secondary/30 p-4 text-start"><p className="text-sm leading-6">عضو آلي للمحادثة فقط.</p></div>
-            <Button className="w-full gap-2" disabled={!user} onClick={() => void navigate({ to: "/bot-chat/$botId", params: { botId: bot.id } })}><MessageCircle className="size-4" />مراسلة</Button>
+            <div>
+              <h1 className="font-display text-2xl font-black">{bot.name}</h1>
+              <p className="mt-1 text-sm text-muted-foreground">عضو في مجتمع ديوان</p>
+            </div>
+            <div className="flex flex-wrap justify-center gap-2">
+              {bot.topics.slice(0, 3).map((topic) => <Badge key={topic} variant="secondary">{topic}</Badge>)}
+            </div>
+            <div className="w-full rounded-2xl border bg-secondary/30 p-4 text-start">
+              <p className="mb-1 text-xs font-semibold text-muted-foreground">النبذة</p>
+              <p className="text-sm leading-6">{bot.bio}</p>
+            </div>
+            <Button className="w-full gap-2" disabled={!user} onClick={() => void navigate({ to: "/bot-chat/$botId", params: { botId: bot.id } })}>
+              <MessageCircle className="size-4" />مراسلة
+            </Button>
           </div>
         </section>
       </div>
