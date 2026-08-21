@@ -81,21 +81,14 @@ export function VoiceRoomDock({ roomName }: { roomName?: string }) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const joined = await joinVoice();
-      if (!joined) {
-        stream.getTracks().forEach((track) => track.stop());
-        return;
-      }
+      if (!joined) { stream.getTracks().forEach((track) => track.stop()); return; }
       streamRef.current = stream;
       setMicOn(true);
       setSpeakerOn(true);
-    } catch {
-      setMicOn(false);
-    }
+    } catch { setMicOn(false); }
   }
 
-  async function toggleMute() {
-    await setSelfMuted(speakerOn);
-  }
+  async function toggleMute() { await setSelfMuted(speakerOn); }
 
   async function leaveVoice() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -125,21 +118,10 @@ export function VoiceRoomDock({ roomName }: { roomName?: string }) {
 
   return (
     <div className="border-t bg-background/80 px-3 py-2 backdrop-blur-sm" aria-label="الصوت">
-      {participants.length > 0 ? (
-        <div className="mb-2 flex items-center gap-2 overflow-x-auto rounded-xl border border-emerald-400/20 bg-emerald-500/5 px-2 py-1.5">
-          <Mic2 className="size-3.5 shrink-0 text-emerald-400" />
-          <span className="shrink-0 text-[10px] font-bold text-emerald-300">على المايك</span>
-          {participants.map((p) => <span key={p.user_id} className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-200"><span className="size-1.5 animate-pulse rounded-full bg-emerald-400" />{p.display_name}{p.is_muted ? " 🔇" : " 🎙️"}</span>)}
-        </div>
-      ) : null}
+      {participants.length > 0 ? <div className="mb-2 flex items-center gap-2 overflow-x-auto rounded-xl border border-emerald-400/20 bg-emerald-500/5 px-2 py-1.5"><Mic2 className="size-3.5 shrink-0 text-emerald-400" /><span className="shrink-0 text-[10px] font-bold text-emerald-300">على المايك</span>{participants.map((p) => <span key={p.user_id} className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-200"><span className="size-1.5 animate-pulse rounded-full bg-emerald-400" />{p.display_name}{p.is_muted ? " 🔇" : " 🎙️"}</span>)}</div> : null}
       <div className="flex items-center gap-2">
-        <div className="hidden min-w-0 flex-1 sm:block">
-          <p className="truncate text-xs font-semibold">الصوت · {roomName ?? "الغرفة"}</p>
-          <p className="truncate text-[10px] text-muted-foreground">{micOn ? "أنت صاعد على المايك" : "ارفع المايك وتكلم مع الموجودين"}</p>
-        </div>
-        <Button type="button" size="sm" variant={micOn ? "default" : "secondary"} className="h-10 min-w-0 flex-1 rounded-xl sm:flex-none" onClick={() => void toggleMic()} title={micOn ? "إيقاف المايك" : "صعود المايك"}>
-          {micOn ? <Mic className="size-4" /> : <MicOff className="size-4" />}<span className="truncate">{micOn ? "🎙️ على المايك" : "صعود المايك"}</span>
-        </Button>
+        <div className="hidden min-w-0 flex-1 sm:block"><p className="truncate text-xs font-semibold">الصوت · {roomName ?? "الغرفة"}</p><p className="truncate text-[10px] text-muted-foreground">{micOn ? "أنت صاعد على المايك" : "ارفع المايك وتكلم مع الموجودين"}</p></div>
+        <Button type="button" size="sm" variant={micOn ? "default" : "secondary"} className="h-10 min-w-0 flex-1 rounded-xl sm:flex-none" onClick={() => void toggleMic()} title={micOn ? "إيقاف المايك" : "صعود المايك"}>{micOn ? <Mic className="size-4" /> : <MicOff className="size-4" />}<span className="truncate">{micOn ? "🎙️ على المايك" : "صعود المايك"}</span></Button>
         {micOn ? <Button type="button" size="icon" variant="secondary" className="size-10 shrink-0 rounded-xl" onClick={() => void toggleMute()} title={speakerOn ? "كتم المايك" : "إلغاء كتم المايك"} aria-label={speakerOn ? "كتم المايك" : "إلغاء كتم المايك"}>{speakerOn ? <Volume2 className="size-4" /> : <MicOff className="size-4" />}</Button> : <Button type="button" size="icon" variant="secondary" className="size-10 shrink-0 rounded-xl" onClick={() => setSpeakerOn((value) => !value)} title={speakerOn ? "كتم الصوت" : "تشغيل الصوت"} aria-label={speakerOn ? "كتم الصوت" : "تشغيل الصوت"}>{speakerOn ? <Volume2 className="size-4" /> : <Headphones className="size-4" />}</Button>}
         <label className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-xl border bg-secondary text-muted-foreground transition-colors hover:bg-secondary/80" title="اختيار موسيقى من الجهاز"><Music2 className="size-4" /><input className="sr-only" type="file" accept="audio/*" onChange={(event) => chooseMusic(event.target.files?.[0])} /></label>
         {micOn ? <Button type="button" size="icon" variant="destructive" className="size-10 shrink-0 rounded-xl" onClick={() => void leaveVoice()} title="مغادرة المايك" aria-label="مغادرة المايك"><PhoneOff className="size-4" /></Button> : null}
