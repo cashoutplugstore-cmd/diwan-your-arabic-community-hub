@@ -54,29 +54,10 @@ export function PublicProfilePage() {
     void queryClient.invalidateQueries({ queryKey: ["friendships", user?.id] });
   };
 
-  const addFriend = useMutation({
-    mutationFn: () => sendFriendRequest(user!.id, userId!),
-    onSuccess: refreshFriendship,
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  const acceptFriend = useMutation({
-    mutationFn: () => respondToRequest(friendship.data!.id, "accepted"),
-    onSuccess: refreshFriendship,
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  const removeFriend = useMutation({
-    mutationFn: () => removeFriendship(friendship.data!.id),
-    onSuccess: refreshFriendship,
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  const message = useMutation({
-    mutationFn: () => getOrCreateDirectRoom(userId!),
-    onSuccess: (slug) => void navigate({ to: "/chat/$slug", params: { slug } }),
-    onError: (error: Error) => toast.error(error.message),
-  });
+  const addFriend = useMutation({ mutationFn: () => sendFriendRequest(user!.id, userId!), onSuccess: refreshFriendship, onError: (error: Error) => toast.error(error.message) });
+  const acceptFriend = useMutation({ mutationFn: () => respondToRequest(friendship.data!.id, "accepted"), onSuccess: refreshFriendship, onError: (error: Error) => toast.error(error.message) });
+  const removeFriend = useMutation({ mutationFn: () => removeFriendship(friendship.data!.id), onSuccess: refreshFriendship, onError: (error: Error) => toast.error(error.message) });
+  const message = useMutation({ mutationFn: () => getOrCreateDirectRoom(userId!), onSuccess: (slug) => void navigate({ to: "/chat/$slug", params: { slug } }), onError: (error: Error) => toast.error(error.message) });
 
   if (bot) {
     return (
@@ -87,8 +68,9 @@ export function PublicProfilePage() {
           <div className="relative flex flex-col items-center gap-4 text-center">
             <div className="grid size-28 place-items-center rounded-full border-4 border-fuchsia-400/40 bg-secondary text-6xl shadow-xl">{bot.avatar}</div>
             <div><h1 className="font-display text-2xl font-black">{bot.name}</h1><p className="mt-1 text-sm text-muted-foreground">@{bot.id}</p></div>
-            <Badge variant="secondary">عضو</Badge>
+            <Badge variant="secondary">BOT</Badge>
             <div className="w-full rounded-2xl border bg-secondary/30 p-4 text-start"><p className="mb-1 text-xs font-semibold text-muted-foreground">النبذة</p><p className="text-sm leading-6">{bot.personality} · يحب {bot.topics.slice(0, 3).join("، ")}.</p></div>
+            <Link to="/bot-chat/$botId" params={{ botId: bot.id }} className="w-full"><Button className="w-full gap-2" disabled={!user}><MessageCircle className="size-4" />مراسلة البوت</Button></Link>
           </div>
         </section>
       </div>
@@ -111,29 +93,11 @@ export function PublicProfilePage() {
         <div className="pointer-events-none absolute -end-20 -top-20 size-56 rounded-full bg-primary/10 blur-3xl" />
         <div className="relative flex flex-col items-center gap-4 text-center">
           <div className="rounded-full bg-gradient-to-br from-primary via-fuchsia-400 to-amber-300 p-1.5 shadow-xl"><UserAvatar name={displayName} src={profile.data.avatar_url} size="lg" role={avatarRole} autoCurrentRole={false} /></div>
-          <div>
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              <h1 className="font-display text-2xl font-black">{displayName}</h1>
-              {role === "admin" ? <Badge className="border-amber-400/40 bg-amber-400/15 text-amber-300"><ShieldCheck className="me-1 size-3" />ADMIN</Badge> : role === "moderator" ? <Badge className="border-sky-400/40 bg-sky-400/15 text-sky-300">MOD</Badge> : null}
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">@{profile.data.username}</p>
-          </div>
-
-          {!isSelf ? (
-            <div className="flex w-full flex-wrap justify-center gap-2">
-              {relation?.status === "accepted" ? (
-                <Button variant="secondary" className="gap-2" onClick={() => removeFriend.mutate()} disabled={busy}><UserMinus className="size-4" />إزالة الصديق</Button>
-              ) : relation?.status === "pending" && relation.addressee_id === user?.id ? (
-                <Button className="gap-2" onClick={() => acceptFriend.mutate()} disabled={busy}><Check className="size-4" />قبول طلب الصداقة</Button>
-              ) : relation?.status === "pending" ? (
-                <Button variant="outline" className="gap-2" disabled><Clock3 className="size-4" />تم إرسال الطلب</Button>
-              ) : (
-                <Button className="gap-2" onClick={() => addFriend.mutate()} disabled={busy || !user}><UserPlus className="size-4" />إرسال طلب صداقة</Button>
-              )}
-              <Button variant="outline" className="gap-2" onClick={() => message.mutate()} disabled={busy || !user}><MessageCircle className="size-4" />مراسلة</Button>
-            </div>
-          ) : <Badge variant="secondary">هذا حسابك</Badge>}
-
+          <div><div className="flex flex-wrap items-center justify-center gap-2"><h1 className="font-display text-2xl font-black">{displayName}</h1>{role === "admin" ? <Badge className="border-amber-400/40 bg-amber-400/15 text-amber-300"><ShieldCheck className="me-1 size-3" />ADMIN</Badge> : role === "moderator" ? <Badge className="border-sky-400/40 bg-sky-400/15 text-sky-300">MOD</Badge> : null}</div><p className="mt-1 text-sm text-muted-foreground">@{profile.data.username}</p></div>
+          {!isSelf ? <div className="flex w-full flex-wrap justify-center gap-2">
+            {relation?.status === "accepted" ? <Button variant="secondary" className="gap-2" onClick={() => removeFriend.mutate()} disabled={busy}><UserMinus className="size-4" />إزالة الصديق</Button> : relation?.status === "pending" && relation.addressee_id === user?.id ? <Button className="gap-2" onClick={() => acceptFriend.mutate()} disabled={busy}><Check className="size-4" />قبول طلب الصداقة</Button> : relation?.status === "pending" ? <Button variant="outline" className="gap-2" disabled><Clock3 className="size-4" />تم إرسال الطلب</Button> : <Button className="gap-2" onClick={() => addFriend.mutate()} disabled={busy || !user}><UserPlus className="size-4" />إرسال طلب صداقة</Button>}
+            <Button variant="outline" className="gap-2" onClick={() => message.mutate()} disabled={busy || !user}><MessageCircle className="size-4" />مراسلة</Button>
+          </div> : <Badge variant="secondary">هذا حسابك</Badge>}
           <div className="w-full rounded-2xl border bg-secondary/30 p-4 text-start"><p className="mb-1 text-xs font-semibold text-muted-foreground">النبذة</p><p className="whitespace-pre-wrap text-sm leading-6">{profile.data.bio || "هذا العضو لم يضف نبذة بعد."}</p></div>
         </div>
       </section>
