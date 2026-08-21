@@ -34,7 +34,7 @@ export function VoiceRoomDock({ roomName }: { roomName?: string }) {
     if (!roomId) return;
     let active = true;
     async function loadParticipants() {
-      const { data } = await supabase.from("room_voice_participants").select("user_id,is_speaker,is_muted").eq("room_id", roomId!).eq("is_speaker", true);
+      const { data } = await supabase.from("room_voice_participants").select("user_id,is_speaker,is_muted").eq("room_id", roomId).eq("is_speaker", true);
       const ids = (data ?? []).map((row) => row.user_id);
       if (!ids.length) { if (active) setParticipants([]); return; }
       const { data: profiles } = await supabase.from("profiles").select("id,display_name,username").in("id", ids);
@@ -46,51 +46,54 @@ export function VoiceRoomDock({ roomName }: { roomName?: string }) {
     return () => { active = false; void supabase.removeChannel(channel); };
   }, [roomId]);
 
-  async function setVoiceState(speaker: boolean, muted = false) {
-    if (!user || !roomId) return;
-    if (!speaker) {
-      await supabase.from("room_voice_participants").delete().eq("room_id", roomId).eq("user_id", user.id);
-      return;
-    }
-    await supabase.from("room_voice_participants").upsert({ room_id: roomId, user_id: user.id, is_speaker: true, is_muted: muted, updated_at: new Date().toISOString() }, { onConflict: "room_id,user_id" });
+  async function joinVoice() {
+    if (!user || !roomId) return false;
+    const { error } = await supabase.from("room_voice_participants").insert({ room_id: roomId, user_id: user.id, is_speaker: true, is_muted: false, updated_at: new Date().toISOString() });
+    return !error;
+  }
+
+  async function leaveVoiceState() {
+    if (!roomId) return;
+    const { error } = await supabase.rpc("voice_leave", { _room_id: roomId });
+    if (!error) setMicOn(false);
+  }
+
+  async function setSelfMuted(muted: boolean) {
+    if (!roomId) return;
+    const { error } = await supabase.rpc("voice_set_self_muted", { _room_id: roomId, _muted: muted });
+    if (!error) setSpeakerOn(!muted);
   }
 
   useEffect(() => () => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     if (mediaUrl) URL.revokeObjectURL(mediaUrl);
     audioRef.current?.pause();
-    if (user && roomId) void supabase.from("room_voice_participants").delete().eq("room_id", roomId).eq("user_id", user.id);
-  }, [mediaUrl, user, roomId]);
+    if (roomId) void supabase.rpc("voice_leave", { _room_id: roomId });
+  }, [mediaUrl, roomId]);
 
   async function toggleMic() {
     if (micOn) {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
-      setMicOn(false);
-      await setVoiceState(false);
+      await leaveVoiceState();
       return;
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const joined = await joinVoice();
+      if (!joined) { stream.getTracks().forEach((track) => track.stop()); return; }
       streamRef.current = stream;
       setMicOn(true);
-      await setVoiceState(true, false);
-    } catch {
-      setMicOn(false);
-    }
+      setSpeakerOn(true);
+    } catch { setMicOn(false); }
   }
 
-  async function toggleMute() {
-    const next = !speakerOn;
-    setSpeakerOn(!next);
-    if (user && roomId) await setVoiceState(true, next);
-  }
+  async function toggleMute() { await setSelfMuted(speakerOn); }
 
   async function leaveVoice() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
-    setMicOn(false);
-    await setVoiceState(false);
+    await leaveVoiceState();
   }
 
   function chooseMusic(file: File | undefined) {
@@ -115,21 +118,10 @@ export function VoiceRoomDock({ roomName }: { roomName?: string }) {
 
   return (
     <div className="border-t bg-background/80 px-3 py-2 backdrop-blur-sm" aria-label="الصوت">
-      {participants.length > 0 ? (
-        <div className="mb-2 flex items-center gap-2 overflow-x-auto rounded-xl border border-emerald-400/20 bg-emerald-500/5 px-2 py-1.5">
-          <Mic2 className="size-3.5 shrink-0 text-emerald-400" />
-          <span className="shrink-0 text-[10px] font-bold text-emerald-300">على المايك</span>
-          {participants.map((p) => <span key={p.user_id} className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-200"><span className="size-1.5 animate-pulse rounded-full bg-emerald-400" />{p.display_name}{p.is_muted ? " 🔇" : " 🎙️"}</span>)}
-        </div>
-      ) : null}
+      {participants.length > 0 ? <div className="mb-2 flex items-center gap-2 overflow-x-auto rounded-xl border border-emerald-400/20 bg-emerald-500/5 px-2 py-1.5"><Mic2 className="size-3.5 shrink-0 text-emerald-400" /><span className="shrink-0 text-[10px] font-bold text-emerald-300">على المايك</span>{participants.map((p) => <span key={p.user_id} className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-200"><span className="size-1.5 animate-pulse rounded-full bg-emerald-400" />{p.display_name}{p.is_muted ? " 🔇" : " 🎙️"}</span>)}</div> : null}
       <div className="flex items-center gap-2">
-        <div className="hidden min-w-0 flex-1 sm:block">
-          <p className="truncate text-xs font-semibold">الصوت · {roomName ?? "الغرفة"}</p>
-          <p className="truncate text-[10px] text-muted-foreground">{micOn ? "أنت صاعد على المايك" : "ارفع المايك وتكلم مع الموجودين"}</p>
-        </div>
-        <Button type="button" size="sm" variant={micOn ? "default" : "secondary"} className="h-10 min-w-0 flex-1 rounded-xl sm:flex-none" onClick={() => void toggleMic()} title={micOn ? "إيقاف المايك" : "صعود المايك"}>
-          {micOn ? <Mic className="size-4" /> : <MicOff className="size-4" />}<span className="truncate">{micOn ? "🎙️ على المايك" : "صعود المايك"}</span>
-        </Button>
+        <div className="hidden min-w-0 flex-1 sm:block"><p className="truncate text-xs font-semibold">الصوت · {roomName ?? "الغرفة"}</p><p className="truncate text-[10px] text-muted-foreground">{micOn ? "أنت صاعد على المايك" : "ارفع المايك وتكلم مع الموجودين"}</p></div>
+        <Button type="button" size="sm" variant={micOn ? "default" : "secondary"} className="h-10 min-w-0 flex-1 rounded-xl sm:flex-none" onClick={() => void toggleMic()} title={micOn ? "إيقاف المايك" : "صعود المايك"}>{micOn ? <Mic className="size-4" /> : <MicOff className="size-4" />}<span className="truncate">{micOn ? "🎙️ على المايك" : "صعود المايك"}</span></Button>
         {micOn ? <Button type="button" size="icon" variant="secondary" className="size-10 shrink-0 rounded-xl" onClick={() => void toggleMute()} title={speakerOn ? "كتم المايك" : "إلغاء كتم المايك"} aria-label={speakerOn ? "كتم المايك" : "إلغاء كتم المايك"}>{speakerOn ? <Volume2 className="size-4" /> : <MicOff className="size-4" />}</Button> : <Button type="button" size="icon" variant="secondary" className="size-10 shrink-0 rounded-xl" onClick={() => setSpeakerOn((value) => !value)} title={speakerOn ? "كتم الصوت" : "تشغيل الصوت"} aria-label={speakerOn ? "كتم الصوت" : "تشغيل الصوت"}>{speakerOn ? <Volume2 className="size-4" /> : <Headphones className="size-4" />}</Button>}
         <label className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-xl border bg-secondary text-muted-foreground transition-colors hover:bg-secondary/80" title="اختيار موسيقى من الجهاز"><Music2 className="size-4" /><input className="sr-only" type="file" accept="audio/*" onChange={(event) => chooseMusic(event.target.files?.[0])} /></label>
         {micOn ? <Button type="button" size="icon" variant="destructive" className="size-10 shrink-0 rounded-xl" onClick={() => void leaveVoice()} title="مغادرة المايك" aria-label="مغادرة المايك"><PhoneOff className="size-4" /></Button> : null}
