@@ -19,10 +19,9 @@ export function PublicProfilePage() {
   const queryClient = useQueryClient();
   const userId = params.userId;
 
-  // AI members have their own profile identity. They must never fall through to
-  // the real Supabase profile queries: their virtual IDs are intentionally not
-  // auth.users IDs. Keeping this branch first also avoids the profile-page
-  // loading state for virtual members.
+  // Virtual members are profile-only identities. Never query Supabase for their
+  // IDs: they are intentionally not auth.users IDs. This also keeps profile
+  // navigation instant instead of leaving the page in a loading state.
   const aiBot = aiMembers.find((member) => member.id === userId);
   const isAiMember = Boolean(aiBot);
   const demoMember = !isAiMember ? DEMO_PROFILES.find((member) => member.id === userId) : undefined;
@@ -30,6 +29,7 @@ export function PublicProfilePage() {
     ? {
         id: aiBot.id,
         name: aiBot.name,
+        username: `${aiBot.name.toLowerCase().replace(/[^\u0600-\u06FFa-z0-9]+/gi, "-")}-${aiBot.id.slice(-2)}`,
         avatar: aiBot.avatar,
         personality: aiBot.personality,
         topics: aiBot.topics,
@@ -80,10 +80,10 @@ export function PublicProfilePage() {
         <section className="glass-strong relative overflow-hidden rounded-3xl p-6">
           <div className="pointer-events-none absolute -end-20 -top-20 size-56 rounded-full bg-fuchsia-400/10 blur-3xl" />
           <div className="relative flex flex-col items-center gap-4 text-center">
-            <div className="grid size-28 place-items-center rounded-full border-4 border-fuchsia-400/40 bg-secondary text-6xl shadow-xl">{bot.avatar}</div>
+            <div className="rounded-full bg-gradient-to-br from-primary via-fuchsia-400 to-amber-300 p-1.5 shadow-xl"><UserAvatar name={bot.name} src={undefined} size="lg" autoCurrentRole={false} /></div>
             <div>
               <h1 className="font-display text-2xl font-black">{bot.name}</h1>
-              <p className="mt-1 text-sm text-muted-foreground">عضو في مجتمع ديوان</p>
+              <p className="mt-1 text-sm text-muted-foreground">@{bot.username}</p>
             </div>
             <div className="flex flex-wrap justify-center gap-2">
               {bot.topics.slice(0, 3).map((topic) => <Badge key={topic} variant="secondary">{topic}</Badge>)}
