@@ -67,10 +67,10 @@ export function PublicProfilePage() {
           <div className="pointer-events-none absolute -end-20 -top-20 size-56 rounded-full bg-fuchsia-400/10 blur-3xl" />
           <div className="relative flex flex-col items-center gap-4 text-center">
             <div className="grid size-28 place-items-center rounded-full border-4 border-fuchsia-400/40 bg-secondary text-6xl shadow-xl">{bot.avatar}</div>
-            <div><h1 className="font-display text-2xl font-black">{bot.name}</h1><p className="mt-1 text-sm text-muted-foreground">@{bot.id}</p></div>
+            <div><h1 className="font-display text-2xl font-black">{bot.name}</h1><p className="mt-1 text-sm text-muted-foreground">@ai_bot</p></div>
             <Badge variant="secondary">BOT</Badge>
-            <div className="w-full rounded-2xl border bg-secondary/30 p-4 text-start"><p className="mb-1 text-xs font-semibold text-muted-foreground">النبذة</p><p className="text-sm leading-6">{bot.personality} · يحب {bot.topics.slice(0, 3).join("، ")}.</p></div>
-            <Link to="/bot-chat/$botId" params={{ botId: bot.id }} className="w-full"><Button className="w-full gap-2" disabled={!user}><MessageCircle className="size-4" />مراسلة البوت</Button></Link>
+            <div className="w-full rounded-2xl border bg-secondary/30 p-4 text-start"><p className="text-sm leading-6">عضو آلي للمحادثة فقط.</p></div>
+            <Button className="w-full gap-2" disabled={!user} onClick={() => void navigate({ to: "/bot-chat/$botId", params: { botId: bot.id } })}><MessageCircle className="size-4" />مراسلة</Button>
           </div>
         </section>
       </div>
