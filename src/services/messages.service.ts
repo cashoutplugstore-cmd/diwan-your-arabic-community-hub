@@ -9,6 +9,8 @@ type AIReplyHandler = (reply: MessageWithAuthor) => void;
 const recentAIContent = new Map<string, string[]>();
 const scheduledAIByMessage = new Set<string>();
 const aiCursorByRoom = new Map<string, number>();
+const lastAIReplyAtByRoom = new Map<string, number>();
+const AI_ROOM_COOLDOWN_MS = 12000;
 
 export async function fetchMessagePage(roomId: string, before?: string | null): Promise<MessageWithAuthor[]> {
   let query = supabase.from("messages").select("*").eq("room_id", roomId).order("created_at", { ascending: false }).limit(MESSAGE_PAGE_SIZE);
@@ -101,7 +103,7 @@ async function requestAIRoomReply(roomId: string, message: string, salt: number,
         persona: `${member.name} — ${member.personality}`,
         recentReplies: recent,
         topics: member.topics,
-        instruction: `أنت ${member.name}، شخصية ${member.personality}. شارك في حوار عربي طبيعي وخفيف بلهجة ${member.dialect}. اهتم بمواضيعك: ${member.topics.join(", ")}. لا تكرر كلاماً سابقاً ولا تتحدث كروبوت.`,
+        instruction: `أنت ${member.name}، شخصية ${member.personality}. شارك في حوار عربي طبيعي وخفيف بلهجة ${member.dialect}. اهتم بمواضيعك: ${member.topics.join(", ")}. لا تكرر كلاماً سابقاً ولا تتحدث كروبوت. لا ترد إلا برد قصير ومناسب للسياق.`,
       },
     });
     if (!error && data?.message && onReply) {
@@ -117,12 +119,18 @@ export function triggerAIRoomReplies(input: { roomId: string; messageId: string;
   if (!input.onReply || !input.message.trim()) return;
   const key = `${input.roomId}:${input.messageId}`;
   if (scheduledAIByMessage.has(key)) return;
+
+  const now = Date.now();
+  const lastReplyAt = lastAIReplyAtByRoom.get(input.roomId) ?? 0;
+  if (now - lastReplyAt < AI_ROOM_COOLDOWN_MS) return;
+  lastAIReplyAtByRoom.set(input.roomId, now);
   scheduledAIByMessage.add(key);
-  const firstDelay = 1500 + Math.floor(Math.random() * 1800);
-  const secondDelay = 4200 + Math.floor(Math.random() * 2200);
-  const onReply = input.onReply;
-  window.setTimeout(() => { void requestAIRoomReply(input.roomId, input.message, 1, Date.now(), onReply); }, firstDelay);
-  window.setTimeout(() => { void requestAIRoomReply(input.roomId, input.message, 2, Date.now(), onReply); scheduledAIByMessage.delete(key); }, secondDelay);
+
+  const delay = 1800 + Math.floor(Math.random() * 2200);
+  window.setTimeout(() => {
+    void requestAIRoomReply(input.roomId, input.message, 1, Date.now(), input.onReply);
+    scheduledAIByMessage.delete(key);
+  }, delay);
 }
 
 export async function sendMessage(input: { roomId: string; userId: string; content: string; replyToId?: string | null; onAIReply?: AIReplyHandler }) {
