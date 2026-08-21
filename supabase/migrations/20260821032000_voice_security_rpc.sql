@@ -1,5 +1,5 @@
 -- Narrow voice mutations: clients may self-mute/leave, but speaker and moderator mute state are server-controlled.
-create or replace function public.voice_leave()
+create or replace function public.voice_leave(_room_id uuid)
 returns void
 language plpgsql
 security definer
@@ -7,11 +7,12 @@ set search_path = public
 as $$
 begin
   delete from public.room_voice_participants
-  where user_id = auth.uid();
+  where room_id = _room_id
+    and user_id = auth.uid();
 end;
 $$;
 
-grant execute on function public.voice_leave() to authenticated;
+grant execute on function public.voice_leave(uuid) to authenticated;
 
 create or replace function public.voice_set_self_muted(_room_id uuid, _muted boolean)
 returns void
