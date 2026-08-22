@@ -39,7 +39,7 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
     if (roomError) throw roomError;
     if (roleError) throw roleError;
     return { ownerId: room?.owner_id ?? null, roomRoles: roomRoles ?? [] };
-  });
+  } });
   const globalRoles = useQuery(myRolesQuery(user?.id));
   const canManageRoles = Boolean(user && (globalRoles.data?.isAdmin || roomMeta.data?.ownerId === user.id));
   const rolesQuery = useQuery({ queryKey: ["member-roles", realMemberIds.join(",")], enabled: realMemberIds.length > 0, staleTime: 60000, queryFn: async () => {
@@ -48,12 +48,12 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
       looseDb.from("premium_subscriptions").select("user_id,status,expires_at").in("user_id", realMemberIds).eq("status", "active"),
     ]);
     return { roles: roles ?? [], vip: ((vip ?? []) as any[]).filter((row) => !row.expires_at || new Date(row.expires_at).getTime() > Date.now()) };
-  });
+  } });
   const voiceQuery = useQuery({ queryKey: ["room-speakers", roomId], enabled: Boolean(roomId), staleTime: 4000, refetchInterval: 5000, queryFn: async () => {
     const { data, error } = await supabase.from("room_voice_participants").select("user_id,is_speaker,is_muted").eq("room_id", roomId!).eq("is_speaker", true);
     if (error) throw error;
     return data ?? [];
-  });
+  } });
   const roleById = useMemo(() => {
     const map = new Map<string, Role>();
     for (const row of roomMeta.data?.roomRoles ?? []) {
