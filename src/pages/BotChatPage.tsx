@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Bot, SendHorizonal } from "lucide-react";
+import { ArrowRight, Bot, SendHorizontal } from "lucide-react";
 import { Link, useParams } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -62,7 +62,7 @@ export function BotChatPage() {
   }
 
   return (
-    <section className="glass-strong mx-auto flex h-[calc(100dvh-115px)] min-h-0 w-full max-w-3xl flex-col overflow-hidden rounded-2xl lg:h-[calc(100dvh-175px)] lg:rounded-3xl">
+    <section className="glass-strong mx-auto flex h-[calc(100dvh-193px)] min-h-0 w-full max-w-3xl flex-col overflow-hidden rounded-2xl lg:h-[calc(100dvh-175px)] lg:rounded-3xl">
       <header className="flex shrink-0 items-center gap-3 border-b bg-background/35 px-3 py-3 sm:px-4">
         <Link to="/">
           <Button type="button" variant="ghost" size="icon" className="size-9 rounded-xl" aria-label="رجوع">
@@ -126,7 +126,7 @@ export function BotChatPage() {
             className="min-h-10 max-h-28 resize-none border-0 bg-transparent px-2 py-2 shadow-none focus-visible:ring-0"
           />
           <Button type="submit" size="icon" className="size-10 shrink-0 rounded-xl" disabled={!draft.trim() || sending} aria-label="إرسال">
-            <SendHorizonal className="size-5" />
+            <SendHorizontal className="size-5" />
           </Button>
         </div>
       </form>
