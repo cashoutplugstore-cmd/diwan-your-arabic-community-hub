@@ -15,16 +15,25 @@ export async function fetchMyRoles(userId: string): Promise<StaffRole> {
     isGlobalOwner(userId),
   ]);
 
+  // Global Owner is platform-wide and must never inherit legacy ADMIN/MOD
+  // presentation inside rooms or chat messages.
+  if (globalOwner) {
+    return {
+      isGlobalOwner: true,
+      isAdmin: false,
+      isModerator: false,
+      isStaff: true,
+    };
+  }
+
   // Role metadata must never prevent chat/DM from rendering.
-  // If the legacy role query is unavailable, preserve the independently
-  // verified Global Owner state and fail closed for legacy staff roles.
   if (error) {
     console.warn("Legacy role lookup unavailable; continuing with safe defaults.", error);
     return {
-      isGlobalOwner: globalOwner,
+      isGlobalOwner: false,
       isAdmin: false,
       isModerator: false,
-      isStaff: globalOwner,
+      isStaff: false,
     };
   }
 
@@ -32,10 +41,10 @@ export async function fetchMyRoles(userId: string): Promise<StaffRole> {
   const isAdmin = roles.has("admin");
   const isModerator = roles.has("moderator");
   return {
-    isGlobalOwner: globalOwner,
+    isGlobalOwner: false,
     isAdmin,
     isModerator,
-    isStaff: globalOwner || isAdmin || isModerator,
+    isStaff: isAdmin || isModerator,
   };
 }
 
