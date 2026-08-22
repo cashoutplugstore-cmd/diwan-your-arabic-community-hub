@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 export type PresenceStatus = "online" | "away";
@@ -12,12 +13,15 @@ export function useRoomPresence(roomId: string | undefined, me: { userId: string
   const [entries, setEntries] = useState<PresenceEntry[]>([]);
   const [activity, setActivity] = useState<PresenceActivity[]>([]);
   const previousRef = useRef<Map<string, string>>(new Map());
+  const ownerIdRef = useRef<string | null>(null);
+  const ownerNameRef = useRef<string>("مالك الغرفة");
 
   useEffect(() => {
     if (!roomId || !me?.userId) {
       setEntries([]);
       setActivity([]);
       previousRef.current = new Map();
+      ownerIdRef.current = null;
       return;
     }
 
@@ -25,6 +29,14 @@ export function useRoomPresence(roomId: string | undefined, me: { userId: string
     let disposed = false;
     const markActive = () => { lastActive = Date.now(); };
     const markOnline = () => { lastActive = Date.now(); };
+
+    const loadOwner = async () => {
+      const { data } = await supabase.from("rooms").select("owner_id,name").eq("id", roomId).maybeSingle();
+      if (disposed || !data) return;
+      ownerIdRef.current = data.owner_id ?? null;
+      ownerNameRef.current = data.name ? `مالك غرفة ${data.name}` : "مالك الغرفة";
+    };
+    void loadOwner();
 
     window.addEventListener("pointerdown", markActive);
     window.addEventListener("keydown", markActive);
@@ -56,10 +68,19 @@ export function useRoomPresence(roomId: string | undefined, me: { userId: string
 
       next.forEach((entry) => {
         if (!previous.has(entry.userId)) {
+          const isOwner = entry.userId === ownerIdRef.current;
           setActivity((items) => [
             { id: crypto.randomUUID(), type: "join" as const, displayName: entry.displayName, at: now },
             ...items,
           ].slice(0, 8));
+
+          if (isOwner) {
+            toast(`👑 ${entry.displayName || ownerNameRef.current} دخل الغرفة`, {
+              description: "مالك الغرفة حاضر الآن",
+              duration: 4200,
+              className: "owner-arrival-toast",
+            });
+          }
         }
       });
 
@@ -94,8 +115,6 @@ export function useRoomPresence(roomId: string | undefined, me: { userId: string
       const result = await channel.track(payload);
       if (result !== "ok") return;
 
-      // Persist a short-lived heartbeat for room cards/counts and create the
-      // durable room_members row through the database trigger on first entry.
       await supabase.from("room_presence").upsert(
         { room_id: roomId, user_id: me.userId, last_seen_at: onlineAt },
         { onConflict: "room_id,user_id" },
