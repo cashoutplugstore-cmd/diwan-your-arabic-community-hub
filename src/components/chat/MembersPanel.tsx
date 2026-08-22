@@ -47,7 +47,7 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
 
   useEffect(() => {
     if (!roomId) return;
-    const channel = supabase.channel(`room-role-sync:${roomId}`)
+    const channel = supabase.channel(`room-role-sync:${roomId}:${crypto.randomUUID()}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "room_members", filter: `room_id=eq.${roomId}` }, () => {
         void qc.invalidateQueries({ queryKey: ["room-role-meta", roomId] });
         void qc.invalidateQueries({ queryKey: ["room_members", "profiles", roomId] });
