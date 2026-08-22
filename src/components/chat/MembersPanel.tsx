@@ -41,7 +41,21 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
     return { ownerId: room?.owner_id ?? null, roomRoles: roomRoles ?? [] };
   } });
   const globalRoles = useQuery(myRolesQuery(user?.id));
-  const canManageRoles = Boolean(user && (globalRoles.data?.isAdmin || roomMeta.data?.ownerId === user.id));
+  const myRoomRole = useMemo(() => roomMeta.data?.roomRoles.find((row) => row.user_id === user?.id)?.role ?? null, [roomMeta.data, user?.id]);
+  const canManageRoles = Boolean(user && (globalRoles.data?.isAdmin || roomMeta.data?.ownerId === user.id || myRoomRole === "admin"));
+  const canAssignRoomAdmin = Boolean(user && (globalRoles.data?.isAdmin || roomMeta.data?.ownerId === user.id));
+
+  useEffect(() => {
+    if (!roomId) return;
+    const channel = supabase.channel(`room-role-sync:${roomId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "room_members", filter: `room_id=eq.${roomId}` }, () => {
+        void qc.invalidateQueries({ queryKey: ["room-role-meta", roomId] });
+        void qc.invalidateQueries({ queryKey: ["room_members", "profiles", roomId] });
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [roomId, qc]);
+
   const rolesQuery = useQuery({ queryKey: ["member-roles", realMemberIds.join(",")], enabled: realMemberIds.length > 0, staleTime: 60000, queryFn: async () => {
     const [{ data: roles }, { data: vip }] = await Promise.all([
       supabase.from("user_roles").select("user_id,role").in("user_id", realMemberIds),
@@ -58,11 +72,12 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
     const map = new Map<string, Role>();
     for (const row of roomMeta.data?.roomRoles ?? []) {
       if (row.role === "owner") map.set(row.user_id, "owner");
-      else if (row.role === "moderator" && map.get(row.user_id) !== "owner") map.set(row.user_id, "moderator");
+      else if (row.role === "admin") map.set(row.user_id, "admin");
+      else if (row.role === "moderator" && map.get(row.user_id) !== "owner" && map.get(row.user_id) !== "admin") map.set(row.user_id, "moderator");
       else if (!map.has(row.user_id)) map.set(row.user_id, "member");
     }
     for (const row of rolesQuery.data?.roles ?? []) {
-      if (row.role === "admin") map.set(row.user_id, "admin");
+      if (row.role === "admin" && !map.has(row.user_id)) map.set(row.user_id, "admin");
       else if (row.role === "moderator" && !map.has(row.user_id)) map.set(row.user_id, "moderator");
     }
     for (const row of (rolesQuery.data?.vip ?? []) as any[]) if (!map.has(row.user_id)) map.set(row.user_id, "vip");
@@ -85,16 +100,31 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
   const speakers = rows.filter((row) => row.speaking && !staff.some((x) => x.id === row.id));
   const vip = rows.filter((row) => row.role === "vip");
   const online = rows.filter((row) => row.role === "member" && row.status !== "offline");
-  const changeRole = useMutation({ mutationFn: async ({ userId, role }: { userId: string; role: "member" | "moderator" }) => {
+
+  const changeRole = useMutation({ mutationFn: async ({ userId, role }: { userId: string; role: "admin" | "member" | "moderator" }) => {
     if (!roomId || !user || !canManageRoles) throw new Error("غير مصرح");
     if (userId.startsWith("virtual-") || userId === user.id || userId === roomMeta.data?.ownerId) throw new Error("لا يمكن تعديل هذا العضو");
+    if (role === "admin" && !canAssignRoomAdmin) throw new Error("فقط مالك الغرفة يستطيع تعيين أدمن");
     const { error } = await supabase.from("room_members").update({ role }).eq("room_id", roomId).eq("user_id", userId);
     if (error) throw error;
-  }, onSuccess: async (_, input) => { await qc.invalidateQueries({ queryKey: ["room-role-meta", roomId] }); await qc.invalidateQueries({ queryKey: ["room_members", "profiles", roomId] }); toast.success(input.role === "moderator" ? "تم تعيين العضو مشرفاً في الغرفة" : "تم إرجاع العضو إلى رتبة عضو"); }, onError: (error) => toast.error((error as Error).message) });
+  }, onSuccess: async (_, input) => {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["room-role-meta", roomId] }),
+      qc.invalidateQueries({ queryKey: ["room_members", "profiles", roomId] }),
+    ]);
+    toast.success(input.role === "admin" ? "تم تعيين أدمن الغرفة بنجاح" : input.role === "moderator" ? "تم تعيين العضو مشرفاً" : "تم إرجاع العضو إلى عضو");
+  }, onError: (error) => toast.error((error as Error).message) });
+
   const renderRoleActions = (row: Row) => {
-    if (!canManageRoles || !roomId || row.virtual || row.id === user?.id || row.id === roomMeta.data?.ownerId || row.role === "admin" || row.role === "speaker") return null;
+    if (!canManageRoles || !roomId || row.virtual || row.id === user?.id || row.id === roomMeta.data?.ownerId || row.role === "speaker") return null;
     const isModerator = row.role === "moderator";
-    return <DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon" className="size-8 shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100" aria-label={`تعديل رتبة ${row.name}`}><MoreVertical className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="min-w-44"><DropdownMenuItem onClick={() => changeRole.mutate({ userId: row.id, role: isModerator ? "member" : "moderator" })} disabled={changeRole.isPending}><Shield className="size-4" />{isModerator ? "إزالة رتبة المشرف" : "تعيين كمشرف"}</DropdownMenuItem>{isModerator ? <DropdownMenuSeparator /> : null}{isModerator ? <DropdownMenuItem onClick={() => changeRole.mutate({ userId: row.id, role: "member" })} disabled={changeRole.isPending}>إرجاع إلى عضو</DropdownMenuItem> : null}</DropdownMenuContent></DropdownMenu>;
+    const isAdmin = row.role === "admin";
+    return <DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon" className="size-8 shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100" aria-label={`تعديل رتبة ${row.name}`}><MoreVertical className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="min-w-48">
+      {canAssignRoomAdmin && !isAdmin ? <DropdownMenuItem onClick={() => changeRole.mutate({ userId: row.id, role: "admin" })} disabled={changeRole.isPending}><Crown className="size-4" />تعيين كأدمن الغرفة</DropdownMenuItem> : null}
+      {canAssignRoomAdmin && isAdmin ? <DropdownMenuItem onClick={() => changeRole.mutate({ userId: row.id, role: "member" })} disabled={changeRole.isPending}><Shield className="size-4" />سحب رتبة الأدمن</DropdownMenuItem> : null}
+      {canAssignRoomAdmin && (isAdmin || !isModerator) ? <DropdownMenuSeparator /> : null}
+      {!isAdmin ? <DropdownMenuItem onClick={() => changeRole.mutate({ userId: row.id, role: isModerator ? "member" : "moderator" })} disabled={changeRole.isPending}><Shield className="size-4" />{isModerator ? "إزالة رتبة المشرف" : "تعيين كمشرف"}</DropdownMenuItem> : null}
+    </DropdownMenuContent></DropdownMenu>;
   };
   const renderRow = (row: Row) => <li key={row.id} className={`group relative flex min-w-0 items-center gap-2 rounded-xl px-2 py-2 transition hover:bg-secondary/60 ${row.role === "admin" ? "border border-rose-400/30 bg-rose-500/[0.08]" : row.role === "owner" ? "border border-amber-400/20 bg-amber-500/[0.05]" : row.role === "moderator" ? "border border-sky-400/15 bg-sky-500/[0.04]" : row.role === "vip" ? "border border-fuchsia-400/15 bg-fuchsia-500/[0.04]" : ""}`}>
     <Link to="/profile/$userId" params={{ userId: row.id }} className="flex min-w-0 flex-1 items-center gap-2"><UserAvatar name={row.name} src={row.avatar} size="sm" status={row.status} role={row.role === "owner" ? "admin" : row.role === "moderator" || row.role === "admin" || row.role === "vip" ? row.role : null} showMemberBadge={row.role === "member"} autoCurrentRole={false} /><span className={`min-w-0 flex-1 truncate text-xs sm:text-sm ${row.role === "admin" ? "font-black text-rose-300" : row.role === "owner" ? "font-black text-amber-300" : row.role === "vip" ? "font-bold text-fuchsia-300" : row.role === "moderator" ? "font-bold text-sky-300" : "font-semibold"}`}>{row.role === "admin" ? "🌹 👑 " : row.role === "owner" ? "👑 " : ""}{row.name}</span></Link>
@@ -119,10 +149,7 @@ export function MembersPanel(props: Props) {
       if (heading) setOpen(true);
     };
     document.addEventListener("click", onRoomNameClick);
-    return () => {
-      media.removeEventListener("change", sync);
-      document.removeEventListener("click", onRoomNameClick);
-    };
+    return () => { media.removeEventListener("change", sync); document.removeEventListener("click", onRoomNameClick); };
   }, []);
   if (isMobile) return <>{open ? <div className="fixed inset-0 z-[70] bg-black/45 backdrop-blur-[2px] animate-in fade-in duration-200" onClick={() => setOpen(false)}><div className="absolute inset-y-0 end-0 flex w-[min(92vw,390px)] flex-col border-s bg-background/95 shadow-2xl backdrop-blur-xl animate-in slide-in-from-end duration-300" onClick={(event) => event.stopPropagation()}><Button type="button" variant="secondary" size="icon" className="absolute start-3 top-3 z-10 size-9 rounded-full shadow-sm" onClick={() => setOpen(false)} aria-label="إغلاق أعضاء الغرفة">×</Button><PanelContent {...props} /></div></div> : null}</>;
   return <PanelContent {...props} />;
