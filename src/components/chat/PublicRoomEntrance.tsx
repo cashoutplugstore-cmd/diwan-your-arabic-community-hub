@@ -19,17 +19,13 @@ export function PublicRoomEntrance({ children, slug }: Props) {
   }, [slug]);
 
   return (
-    <div className="relative h-full min-h-0 overflow-hidden">
-      <style>{`
-        @keyframes diwanPublicReveal { from { opacity:0; transform:translateY(8px) scale(.985); filter:blur(4px); } to { opacity:1; transform:translateY(0) scale(1); filter:blur(0); } }
-        @keyframes diwanPublicVeil { 0% { opacity:0; } 12% { opacity:1; } 72% { opacity:1; } 100% { opacity:0; } }
-        @keyframes diwanPublicCore { 0%,100% { transform:scale(.96); box-shadow:0 0 28px rgba(59,130,246,.14); } 50% { transform:scale(1.04); box-shadow:0 0 58px rgba(59,130,246,.28); } }
-        @keyframes diwanPublicRing { from { transform:scale(.7); opacity:.5; } to { transform:scale(1.65); opacity:0; } }
-        @keyframes diwanPublicSweep { from { transform:translateX(-125%) skewX(-12deg); opacity:0; } 22% { opacity:.55; } 72% { opacity:.55; } to { transform:translateX(125%) skewX(-12deg); opacity:0; } }
-        @keyframes diwanPublicSpark { 0%,100% { transform:translateY(0) scale(.7); opacity:.3; } 50% { transform:translateY(-10px) scale(1); opacity:.9; } }
-        @media (prefers-reduced-motion: reduce) { .diwan-public-motion { animation:none !important; } }
-      `}</style>
-
+    <div
+      className="relative min-h-0 overflow-hidden"
+      style={{
+        height: "calc(100% + 78px + env(safe-area-inset-bottom))",
+        marginBottom: "calc(-78px - env(safe-area-inset-bottom))",
+      }}
+    >
       <div className="h-full min-h-0">
         <div
           className="h-full min-h-0"
@@ -58,6 +54,16 @@ export function PublicRoomEntrance({ children, slug }: Props) {
           <span className="absolute left-[27%] bottom-[28%] size-1 rounded-full bg-blue-300/60 diwan-public-motion" style={{ animation: "diwanPublicSpark 840ms 260ms ease-in-out infinite" }} />
         </div>
       ) : null}
+
+      <style>{`
+        @keyframes diwanPublicReveal { from { opacity:0; transform:translateY(8px) scale(.985); filter:blur(4px); } to { opacity:1; transform:translateY(0) scale(1); filter:blur(0); } }
+        @keyframes diwanPublicVeil { 0% { opacity:0; } 12% { opacity:1; } 72% { opacity:1; } 100% { opacity:0; } }
+        @keyframes diwanPublicCore { 0%,100% { transform:scale(.96); box-shadow:0 0 28px rgba(59,130,246,.14); } 50% { transform:scale(1.04); box-shadow:0 0 58px rgba(59,130,246,.28); } }
+        @keyframes diwanPublicRing { from { transform:scale(.7); opacity:.5; } to { transform:scale(1.65); opacity:0; } }
+        @keyframes diwanPublicSweep { from { transform:translateX(-125%) skewX(-12deg); opacity:0; } 22% { opacity:.55; } 72% { opacity:.55; } to { transform:translateX(125%) skewX(-12deg); opacity:0; } }
+        @keyframes diwanPublicSpark { 0%,100% { transform:translateY(0) scale(.7); opacity:.3; } 50% { transform:translateY(-10px) scale(1); opacity:.9; } }
+        @media (prefers-reduced-motion: reduce) { .diwan-public-motion { animation:none !important; } }
+      `}</style>
     </div>
   );
 }
