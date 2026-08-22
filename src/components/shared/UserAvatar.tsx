@@ -17,7 +17,8 @@ export function UserAvatar({ name, src, size = "md", status, role, className, sh
   const currentRoles = useQuery({ ...myRolesQuery(user?.id), enabled: autoCurrentRole && Boolean(user?.id) });
   const premium = useQuery({ queryKey: ["avatar-premium", user?.id], enabled: autoCurrentRole && Boolean(user?.id), staleTime: 60000, queryFn: async () => { if (!user?.id) return false; const { data } = await looseDb.from("premium_subscriptions").select("status,expires_at").eq("user_id", user.id).eq("status", "active").limit(1); const row = (data as any[] | null)?.[0]; return Boolean(row && (!row.expires_at || new Date(row.expires_at).getTime() > Date.now())); } });
   const isCurrentUser = Boolean(autoCurrentRole && user?.id && name && name === user.email?.split("@")[0]);
-  const effectiveRole: Role | null = role ?? (isCurrentUser && currentRoles.data?.isGlobalOwner ? "global_owner" : isCurrentUser && currentRoles.data?.isAdmin ? "global_admin" : isCurrentUser && currentRoles.data?.isModerator ? "moderator" : isCurrentUser && premium.data ? "vip" : null);
+  const globalOwnerWins = Boolean(isCurrentUser && currentRoles.data?.isGlobalOwner);
+  const effectiveRole: Role | null = globalOwnerWins ? "global_owner" : role ?? (isCurrentUser && currentRoles.data?.isAdmin ? "global_admin" : isCurrentUser && currentRoles.data?.isModerator ? "moderator" : isCurrentUser && premium.data ? "vip" : null);
   const showCompactRoleBadge = size !== "sm";
   const isMember = showCompactRoleBadge && (showMemberBadge || status === "online" || isCurrentUser) && !effectiveRole;
   const design = effectiveRole ? ROLE_DESIGN[effectiveRole] : null;
