@@ -14,7 +14,20 @@ export async function fetchMyRoles(userId: string): Promise<StaffRole> {
     supabase.from("user_roles").select("role").eq("user_id", userId),
     isGlobalOwner(userId),
   ]);
-  if (error) throw error;
+
+  // Role metadata must never prevent chat/DM from rendering.
+  // If the legacy role query is unavailable, preserve the independently
+  // verified Global Owner state and fail closed for legacy staff roles.
+  if (error) {
+    console.warn("Legacy role lookup unavailable; continuing with safe defaults.", error);
+    return {
+      isGlobalOwner: globalOwner,
+      isAdmin: false,
+      isModerator: false,
+      isStaff: globalOwner,
+    };
+  }
+
   const roles = new Set((data ?? []).map((r) => r.role));
   const isAdmin = roles.has("admin");
   const isModerator = roles.has("moderator");
@@ -32,4 +45,5 @@ export const myRolesQuery = (userId: string | undefined) =>
     queryFn: () => fetchMyRoles(userId!),
     enabled: Boolean(userId),
     staleTime: 60_000,
+    retry: 1,
   });
