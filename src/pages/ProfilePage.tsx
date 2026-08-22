@@ -15,6 +15,7 @@ import { useI18n } from "@/contexts/i18n-context";
 import { supabase } from "@/integrations/supabase/client";
 import { looseDb } from "@/integrations/supabase/loose-db";
 import { profileQuery } from "@/services/profiles.service";
+import { isGlobalOwner } from "@/services/platform-owner.service";
 
 export function ProfilePage() {
   const { t } = useI18n();
@@ -25,22 +26,21 @@ export function ProfilePage() {
     queryKey: ["profile-identity", user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
-      const [{ data: roles }, { data: vip }] = await Promise.all([
+      const [{ data: roles }, { data: vip }, globalOwner] = await Promise.all([
         supabase.from("user_roles").select("role").eq("user_id", user!.id),
-        looseDb
-          .from("premium_subscriptions")
-          .select("status,expires_at")
-          .eq("user_id", user!.id)
-          .eq("status", "active")
-          .maybeSingle(),
+        looseDb.from("premium_subscriptions").select("status,expires_at").eq("user_id", user!.id).eq("status", "active").maybeSingle(),
+        isGlobalOwner(user!.id),
       ]);
-      const role = roles?.some((r) => r.role === "admin")
-        ? "admin"
-        : roles?.some((r) => r.role === "moderator")
-          ? "moderator"
-          : null;
+      const role = globalOwner
+        ? "global_owner"
+        : roles?.some((r) => r.role === "admin")
+          ? "admin"
+          : roles?.some((r) => r.role === "moderator")
+            ? "moderator"
+            : null;
       return {
         role,
+        isGlobalOwner: globalOwner,
         isVip: !!vip && (!vip.expires_at || new Date(vip.expires_at).getTime() > Date.now()),
       };
     },
@@ -64,25 +64,14 @@ export function ProfilePage() {
   const save = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("Not authenticated");
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          display_name: displayName.trim() || null,
-          bio: bio.trim() || null,
-          avatar_url: avatarUrl.trim() || null,
-          gender: gender || null,
-        } as any)
-        .eq("id", user.id);
+      const { error } = await supabase.from("profiles").update({ display_name: displayName.trim() || null, bio: bio.trim() || null, avatar_url: avatarUrl.trim() || null, gender: gender || null } as any).eq("id", user.id);
       if (error) throw error;
     },
     onSuccess: async () => {
       await Promise.all([
-        qc.invalidateQueries({ queryKey: ["profile", user?.id] }),
-        qc.invalidateQueries({ queryKey: ["profile-identity", user?.id] }),
-        qc.invalidateQueries({ queryKey: ["messages"] }),
-        qc.invalidateQueries({ queryKey: ["room_members"] }),
-        qc.invalidateQueries({ queryKey: ["chat-member-roles"] }),
-        qc.invalidateQueries({ queryKey: ["member-roles"] }),
+        qc.invalidateQueries({ queryKey: ["profile", user?.id] }), qc.invalidateQueries({ queryKey: ["profile-identity", user?.id] }),
+        qc.invalidateQueries({ queryKey: ["messages"] }), qc.invalidateQueries({ queryKey: ["room_members"] }),
+        qc.invalidateQueries({ queryKey: ["chat-member-roles"] }), qc.invalidateQueries({ queryKey: ["member-roles"] }),
       ]);
       toast.success("تم حفظ التغييرات وتطبيقها بنجاح ✨");
     },
@@ -91,45 +80,31 @@ export function ProfilePage() {
 
   if (profile.isLoading) return <ListSkeleton rows={3} />;
   const role = identity.data?.role;
-  const avatarRole = role === "admin" ? "admin" : role === "moderator" ? "moderator" : identity.data?.isVip ? "vip" : null;
+  const avatarRole = role === "global_owner" ? "global_owner" : role === "admin" ? "admin" : role === "moderator" ? "moderator" : identity.data?.isVip ? "vip" : null;
+  const profileTone = role === "global_owner" ? "text-amber-200" : role === "admin" ? "text-amber-300" : role === "moderator" ? "text-sky-300" : identity.data?.isVip ? "text-fuchsia-300" : "";
 
   return (
     <div className="space-y-6">
       <PageHeader title={t.nav.profile} description={profile.data?.username ?? ""} />
-      <form
-        className="glass-strong space-y-5 rounded-3xl p-5 sm:p-6"
-        onSubmit={(e) => {
-          e.preventDefault();
-          save.mutate();
-        }}
-      >
+      <form className="glass-strong space-y-5 rounded-3xl p-5 sm:p-6" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
         <div className="sticky top-2 z-20 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-white/10 bg-background/90 p-2 shadow-lg backdrop-blur-xl">
           <div className="flex items-center gap-1.5" role="group" aria-label="الجنس">
-            <Button type="button" size="sm" variant={gender === "male" ? "default" : "outline"} className="h-8 px-2.5 text-xs" onClick={() => setGender("male")} aria-pressed={gender === "male"}>
-              <VenusAndMars className="me-1 size-3.5" />ذكر
-            </Button>
-            <Button type="button" size="sm" variant={gender === "female" ? "default" : "outline"} className="h-8 px-2.5 text-xs" onClick={() => setGender("female")} aria-pressed={gender === "female"}>
-              <VenusAndMars className="me-1 size-3.5" />أنثى
-            </Button>
+            <Button type="button" size="sm" variant={gender === "male" ? "default" : "outline"} className="h-8 px-2.5 text-xs" onClick={() => setGender("male")} aria-pressed={gender === "male"}><VenusAndMars className="me-1 size-3.5" />ذكر</Button>
+            <Button type="button" size="sm" variant={gender === "female" ? "default" : "outline"} className="h-8 px-2.5 text-xs" onClick={() => setGender("female")} aria-pressed={gender === "female"}><VenusAndMars className="me-1 size-3.5" />أنثى</Button>
           </div>
-          <Button type="submit" size="sm" className="h-9 min-w-36" disabled={save.isPending || !user}>
-            {save.isPending ? "جارٍ الحفظ..." : "حفظ التغييرات"}
-            <Sparkles className="ms-2 size-3.5" />
-          </Button>
+          <Button type="submit" size="sm" className="h-9 min-w-36" disabled={save.isPending || !user}>{save.isPending ? "جارٍ الحفظ..." : "حفظ التغييرات"}<Sparkles className="ms-2 size-3.5" /></Button>
         </div>
 
         <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-gradient-to-br from-primary/15 via-background to-fuchsia-500/5 p-6 shadow-2xl">
           <div className="pointer-events-none absolute -end-20 -top-20 size-56 rounded-full bg-primary/10 blur-3xl" />
           <div className="relative flex flex-col items-center gap-5 text-center sm:flex-row sm:text-start">
-            <div className="relative rounded-full bg-gradient-to-br from-primary via-fuchsia-400 to-amber-300 p-1.5 shadow-[0_0_35px_rgba(168,85,247,.25)]">
+            <div className={"relative rounded-full p-1.5 shadow-[0_0_35px_rgba(168,85,247,.25)] " + (role === "global_owner" ? "bg-gradient-to-br from-amber-300 via-yellow-400 to-amber-600 shadow-[0_0_45px_rgba(251,191,36,.45)]" : "bg-gradient-to-br from-primary via-fuchsia-400 to-amber-300")}>
               <UserAvatar name={displayName || profile.data?.username || null} src={avatarUrl} size="lg" role={avatarRole} />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
-                <h1 className={"font-display text-2xl font-black " + (role === "admin" ? "text-amber-300" : role === "moderator" ? "text-sky-300" : identity.data?.isVip ? "text-fuchsia-300" : "")}>
-                  {displayName || profile.data?.username}
-                </h1>
-                {role === "admin" ? <Badge className="border-amber-400/40 bg-amber-400/15 text-amber-300"><ShieldCheck className="me-1 size-3" />ADMIN</Badge> : role === "moderator" ? <Badge className="border-sky-400/40 bg-sky-400/15 text-sky-300">MOD</Badge> : identity.data?.isVip ? <Badge className="border-fuchsia-400/40 bg-fuchsia-400/15 text-fuchsia-300"><Crown className="me-1 size-3" />VIP</Badge> : null}
+                <h1 className={"font-display text-2xl font-black " + profileTone}>{displayName || profile.data?.username}</h1>
+                {role === "global_owner" ? <Badge className="border-amber-300/50 bg-gradient-to-r from-amber-500/20 to-yellow-300/20 text-amber-200"><Crown className="me-1 size-3" />GLOBAL OWNER</Badge> : role === "admin" ? <Badge className="border-amber-400/40 bg-amber-400/15 text-amber-300"><ShieldCheck className="me-1 size-3" />ADMIN</Badge> : role === "moderator" ? <Badge className="border-sky-400/40 bg-sky-400/15 text-sky-300">MOD</Badge> : identity.data?.isVip ? <Badge className="border-fuchsia-400/40 bg-fuchsia-400/15 text-fuchsia-300"><Crown className="me-1 size-3" />VIP</Badge> : null}
               </div>
               <p className="mt-1 text-sm text-muted-foreground">@{profile.data?.username}</p>
               <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted-foreground sm:mx-0">{bio || "أضف نبذة جميلة عن نفسك في ديوان ✨"}</p>
@@ -138,22 +113,10 @@ export function ProfilePage() {
         </section>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="display-name">{t.auth.displayName}</Label>
-            <Input id="display-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoComplete="nickname" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="avatar-url"><UserRound className="me-1 inline size-4" />الصورة الشخصية</Label>
-            <Input id="avatar-url" type="url" inputMode="url" placeholder="https://..." dir="ltr" value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} autoComplete="url" aria-describedby="avatar-help" />
-            <p id="avatar-help" className="text-xs text-muted-foreground">أدخل رابط صورة مباشر يبدأ بـ https://</p>
-          </div>
+          <div className="space-y-2"><Label htmlFor="display-name">{t.auth.displayName}</Label><Input id="display-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoComplete="nickname" /></div>
+          <div className="space-y-2"><Label htmlFor="avatar-url"><UserRound className="me-1 inline size-4" />الصورة الشخصية</Label><Input id="avatar-url" type="url" inputMode="url" placeholder="https://..." dir="ltr" value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} autoComplete="url" aria-describedby="avatar-help" /><p id="avatar-help" className="text-xs text-muted-foreground">أدخل رابط صورة مباشر يبدأ بـ https://</p></div>
         </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="bio">Bio</Label>
-          <Textarea id="bio" value={bio} onChange={(e) => setBio(e.target.value)} className="min-h-28" maxLength={500} />
-          <p className="text-end text-xs text-muted-foreground">{bio.length}/500</p>
-        </div>
+        <div className="space-y-2"><Label htmlFor="bio">Bio</Label><Textarea id="bio" value={bio} onChange={(e) => setBio(e.target.value)} className="min-h-28" maxLength={500} /><p className="text-end text-xs text-muted-foreground">{bio.length}/500</p></div>
       </form>
     </div>
   );
