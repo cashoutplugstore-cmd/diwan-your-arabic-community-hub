@@ -19,7 +19,7 @@ export function PublicRoomEntrance({ children, slug }: Props) {
   }, [slug]);
 
   return (
-    <div className="relative h-full min-h-0 min-w-0 overflow-hidden">
+    <div className="diwan-public-shell relative h-full min-h-0 min-w-0 overflow-hidden">
       <div
         className="h-full min-h-0 min-w-0"
         style={{ animation: ready ? "diwanPublicReveal 560ms cubic-bezier(.2,.8,.2,1) both" : undefined }}
@@ -54,6 +54,9 @@ export function PublicRoomEntrance({ children, slug }: Props) {
         @keyframes diwanPublicRing { from { transform:scale(.7); opacity:.5; } to { transform:scale(1.65); opacity:0; } }
         @keyframes diwanPublicSweep { from { transform:translateX(-125%) skewX(-12deg); opacity:0; } 22% { opacity:.55; } 72% { opacity:.55; } to { transform:translateX(125%) skewX(-12deg); opacity:0; } }
         @keyframes diwanPublicSpark { 0%,100% { transform:translateY(0) scale(.7); opacity:.3; } 50% { transform:translateY(-10px) scale(1); opacity:.9; } }
+        @media (max-width: 1023px) {
+          .diwan-public-shell > div:first-child > div:first-child { height: calc(100% + 78px) !important; padding-bottom: 0 !important; }
+        }
         @media (prefers-reduced-motion: reduce) { .diwan-public-motion { animation:none !important; } }
       `}</style>
     </div>
