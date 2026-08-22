@@ -28,14 +28,11 @@ export function PublicRoomEntrance({ children, slug }: Props) {
         @keyframes diwanPublicSweep { from { transform:translateX(-125%) skewX(-12deg); opacity:0; } 22% { opacity:.55; } 72% { opacity:.55; } to { transform:translateX(125%) skewX(-12deg); opacity:0; } }
         @keyframes diwanPublicSpark { 0%,100% { transform:translateY(0) scale(.7); opacity:.3; } 50% { transform:translateY(-10px) scale(1); opacity:.9; } }
         @media (prefers-reduced-motion: reduce) { .diwan-public-motion { animation:none !important; } }
-        /* Public room uses the mobile viewport height without the old double bottom reservation. */
-        @media (max-width: 639px) { .diwan-public-room-shell > .diwan-public-room-page { height: calc(100% + 37px) !important; } }
-        @media (min-width: 640px) and (max-width: 1023px) { .diwan-public-room-shell > .diwan-public-room-page { height: calc(100% + 37px) !important; } }
       `}</style>
 
-      <div className="diwan-public-room-shell h-full min-h-0">
+      <div className="h-full min-h-0">
         <div
-          className="diwan-public-room-page h-full min-h-0"
+          className="h-full min-h-0"
           style={{ animation: ready ? "diwanPublicReveal 560ms cubic-bezier(.2,.8,.2,1) both" : undefined }}
         >
           {children}
@@ -43,11 +40,7 @@ export function PublicRoomEntrance({ children, slug }: Props) {
       </div>
 
       {visible ? (
-        <div
-          className="pointer-events-none absolute inset-0 z-[60] grid place-items-center overflow-hidden bg-slate-950/88 backdrop-blur-sm"
-          style={{ animation: "diwanPublicVeil 900ms cubic-bezier(.65,0,.35,1) forwards" }}
-          aria-hidden="true"
-        >
+        <div className="pointer-events-none absolute inset-0 z-[60] grid place-items-center overflow-hidden bg-slate-950/88 backdrop-blur-sm" style={{ animation: "diwanPublicVeil 900ms cubic-bezier(.65,0,.35,1) forwards" }} aria-hidden="true">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_46%,rgba(59,130,246,.14),transparent_25%),radial-gradient(circle_at_30%_70%,rgba(251,191,36,.06),transparent_35%)]" />
           <div className="absolute size-48 rounded-full border border-blue-300/15 diwan-public-motion" style={{ animation: "diwanPublicRing 900ms ease-out infinite" }} />
           <div className="absolute size-32 rounded-full border border-primary/15 diwan-public-motion" style={{ animation: "diwanPublicRing 900ms 140ms ease-out infinite" }} />
