@@ -24,7 +24,32 @@ export function useRealtimeMessages(roomId: string | undefined, handlers: Handle
         .channel(`room-messages-${roomId}`)
         .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` }, (payload) => {
           const message = payload.new as Message;
-          if (currentUserId && message.user_id === currentUserId) return;
+
+          // Reconcile the server INSERT with the optimistic message instead of
+          // ignoring our own realtime event. The optimistic id is local-only,
+          // so match by author/content within a short time window and replace it
+          // with the canonical database row. This prevents duplicate bubbles.
+          if (currentUserId && message.user_id === currentUserId) {
+            const now = new Date(message.created_at).getTime();
+            let reconciled = false;
+            queryClient.setQueryData<any>(["messages", roomId], (prev: any) => {
+              if (!prev?.pages) return prev;
+              const pages = prev.pages.map((page: any[]) => page.map((item) => {
+                const itemTime = new Date(item.created_at).getTime();
+                const isOptimistic = String(item.id).startsWith("optimistic-");
+                const sameContent = item.user_id === message.user_id && item.content === message.content;
+                const closeEnough = Math.abs(now - itemTime) <= 15000;
+                if (isOptimistic && sameContent && closeEnough) {
+                  reconciled = true;
+                  return { ...message, author: item.author ?? null };
+                }
+                return item;
+              }));
+              return { ...prev, pages };
+            });
+            if (reconciled) return;
+          }
+
           handlersRef.current.onInsert?.(message);
         })
         .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` }, (payload) => {
