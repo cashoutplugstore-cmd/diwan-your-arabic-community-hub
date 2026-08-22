@@ -2,6 +2,7 @@ import * as React from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { ChatRoomPage } from "@/pages/ChatPage";
 import { PrivateChatPage } from "@/pages/PrivateChatPage";
+import { PrivateChatEntrance } from "@/components/chat/PrivateChatEntrance";
 import { AmbientAIRoomActivity } from "@/components/chat/AmbientAIRoomActivity";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -33,7 +34,13 @@ function ChatRoomRoute() {
   }, [slug]);
 
   if (!room) return null;
-  if (room.is_private) return <PrivateChatPage slug={slug} />;
+  if (room.is_private) {
+    return (
+      <PrivateChatEntrance key={slug} slug={slug}>
+        <PrivateChatPage slug={slug} />
+      </PrivateChatEntrance>
+    );
+  }
 
   return (
     <>
