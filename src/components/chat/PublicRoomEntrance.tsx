@@ -55,11 +55,8 @@ export function PublicRoomEntrance({ children, slug }: Props) {
         @keyframes diwanPublicSweep { from { transform:translateX(-125%) skewX(-12deg); opacity:0; } 22% { opacity:.55; } 72% { opacity:.55; } to { transform:translateX(125%) skewX(-12deg); opacity:0; } }
         @keyframes diwanPublicSpark { 0%,100% { transform:translateY(0) scale(.7); opacity:.3; } 50% { transform:translateY(-10px) scale(1); opacity:.9; } }
         @media (max-width: 1023px) {
-          .diwan-public-shell > div:first-child > div:first-child {
-            height: calc(100% - 24px) !important;
-            margin-top: 24px !important;
-            padding-bottom: 0 !important;
-          }
+          .diwan-public-shell > div:first-child { height: calc(100% - 32px) !important; margin-top: 8px; margin-bottom: 24px; }
+          .diwan-public-shell > div:first-child > div:first-child { height: 100% !important; padding-bottom: 0 !important; }
         }
         @media (prefers-reduced-motion: reduce) { .diwan-public-motion { animation:none !important; } }
       `}</style>
