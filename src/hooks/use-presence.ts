@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createElement, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -45,7 +45,9 @@ export function useRoomPresence(roomId: string | undefined, me: { userId: string
           const isOwner = entry.userId === ownerIdRef.current;
           setActivity((items) => [{ id: crypto.randomUUID(), type: "join", displayName: entry.displayName, at: now }, ...items].slice(0, 8));
           if (isOwner) {
-            const avatar = entry.avatarUrl ? <img src={entry.avatarUrl} alt="" className="size-11 rounded-full object-cover ring-2 ring-amber-300/80" /> : <span className="grid size-11 place-items-center rounded-full bg-gradient-to-br from-amber-300 via-yellow-400 to-orange-500 text-xl shadow-[0_0_24px_rgba(251,191,36,.45)]">👑</span>;
+            const avatar = entry.avatarUrl
+              ? createElement("img", { src: entry.avatarUrl, alt: "", className: "size-11 rounded-full object-cover ring-2 ring-amber-300/80" })
+              : createElement("span", { className: "grid size-11 place-items-center rounded-full bg-gradient-to-br from-amber-300 via-yellow-400 to-orange-500 text-xl shadow-[0_0_24px_rgba(251,191,36,.45)]" }, "👑");
             toast(`👑 ${entry.displayName || ownerNameRef.current} دخل الغرفة`, {
               description: "مالك الغرفة حاضر الآن • ترحيب خاص",
               duration: 5000,
