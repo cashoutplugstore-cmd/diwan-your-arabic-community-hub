@@ -3,11 +3,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ChatRoomPage } from "@/pages/ChatPage";
 import { PrivateChatPage } from "@/pages/PrivateChatPage";
 import { PrivateChatEntrance } from "@/components/chat/PrivateChatEntrance";
+import { PublicRoomEntrance } from "@/components/chat/PublicRoomEntrance";
 import { AmbientAIRoomActivity } from "@/components/chat/AmbientAIRoomActivity";
 import { supabase } from "@/integrations/supabase/client";
 
 const title = "المحادثة | ديوان";
-const description = "محادثة خاصة فردية داخل ديوان.";
+const description = "محادثة داخل ديوان.";
 
 export const Route = createFileRoute("/_authenticated/chat/$slug")({
   head: () => ({
@@ -43,13 +44,13 @@ function ChatRoomRoute() {
   }
 
   return (
-    <>
+    <PublicRoomEntrance key={slug} slug={slug}>
       <ChatRoomPage slug={slug} />
       <React.Suspense fallback={null}>
         <AmbientAIRoomActivity roomId={room.id} />
       </React.Suspense>
-    </>
+    </PublicRoomEntrance>
   );
 }
 
-// Public rooms and private DMs intentionally use separate UIs.
+// Public rooms and private DMs intentionally use separate entrance experiences.
