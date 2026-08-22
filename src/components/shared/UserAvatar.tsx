@@ -14,12 +14,14 @@ const icons = { global_owner: Crown, global_admin: Gem, owner: Crown, admin: Shi
 
 export function UserAvatar({ name, src, size = "md", status, role, className, showMemberBadge = false, autoCurrentRole = true }: Props) {
   const { user } = useAuth();
-  const currentRoles = useQuery({ ...myRolesQuery(user?.id), enabled: autoCurrentRole && Boolean(user?.id) });
+  // Keep the current user's global-owner status visible even when a parent
+  // intentionally disables the broader automatic-role lookup (the chat does).
+  const currentRoles = useQuery({ ...myRolesQuery(user?.id), enabled: Boolean(user?.id) && (autoCurrentRole || !role) });
   const premium = useQuery({ queryKey: ["avatar-premium", user?.id], enabled: autoCurrentRole && Boolean(user?.id), staleTime: 60000, queryFn: async () => { if (!user?.id) return false; const { data } = await looseDb.from("premium_subscriptions").select("status,expires_at").eq("user_id", user.id).eq("status", "active").limit(1); const row = (data as any[] | null)?.[0]; return Boolean(row && (!row.expires_at || new Date(row.expires_at).getTime() > Date.now())); } });
-  const isCurrentUser = Boolean(autoCurrentRole && user?.id && name && name === user.email?.split("@")[0]);
+  const isCurrentUser = Boolean(user?.id && user?.id === (user?.id));
   const globalOwnerWins = Boolean(isCurrentUser && currentRoles.data?.isGlobalOwner);
-  const effectiveRole: Role | null = globalOwnerWins ? "global_owner" : role ?? (isCurrentUser && currentRoles.data?.isAdmin ? "global_admin" : isCurrentUser && currentRoles.data?.isModerator ? "moderator" : isCurrentUser && premium.data ? "vip" : null);
-  const showCompactRoleBadge = size !== "sm";
+  const effectiveRole: Role | null = globalOwnerWins ? "global_owner" : role ?? (autoCurrentRole && isCurrentUser && currentRoles.data?.isAdmin ? "global_admin" : autoCurrentRole && isCurrentUser && currentRoles.data?.isModerator ? "moderator" : autoCurrentRole && isCurrentUser && premium.data ? "vip" : null);
+  const showCompactRoleBadge = size !== "sm" || effectiveRole === "global_owner";
   const isMember = showCompactRoleBadge && (showMemberBadge || status === "online" || isCurrentUser) && !effectiveRole;
   const design = effectiveRole ? ROLE_DESIGN[effectiveRole] : null;
   const Icon = effectiveRole ? icons[effectiveRole] : null;
