@@ -37,8 +37,10 @@ function ChatRoomRoute() {
 
   return (
     <>
-      <AmbientAIRoomActivity roomId={room.id} />
       <ChatRoomPage slug={slug} />
+      <React.Suspense fallback={null}>
+        <AmbientAIRoomActivity roomId={room.id} />
+      </React.Suspense>
     </>
   );
 }
