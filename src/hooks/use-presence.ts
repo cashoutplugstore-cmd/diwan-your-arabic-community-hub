@@ -18,18 +18,11 @@ export function useRoomPresence(roomId: string | undefined, me: { userId: string
 
   useEffect(() => {
     if (!roomId || !me?.userId) {
-      setEntries([]);
-      setActivity([]);
-      previousRef.current = new Map();
-      ownerIdRef.current = null;
-      return;
+      setEntries([]); setActivity([]); previousRef.current = new Map(); ownerIdRef.current = null; return;
     }
-
-    let lastActive = Date.now();
-    let disposed = false;
+    let lastActive = Date.now(); let disposed = false;
     const markActive = () => { lastActive = Date.now(); };
     const markOnline = () => { lastActive = Date.now(); };
-
     const loadOwner = async () => {
       const { data } = await supabase.from("rooms").select("owner_id,name").eq("id", roomId).maybeSingle();
       if (disposed || !data) return;
@@ -37,136 +30,48 @@ export function useRoomPresence(roomId: string | undefined, me: { userId: string
       ownerNameRef.current = data.name ? `مالك غرفة ${data.name}` : "مالك الغرفة";
     };
     void loadOwner();
+    window.addEventListener("pointerdown", markActive); window.addEventListener("keydown", markActive); window.addEventListener("focus", markActive);
 
-    window.addEventListener("pointerdown", markActive);
-    window.addEventListener("keydown", markActive);
-    window.addEventListener("focus", markActive);
-
-    const channel = supabase.channel(`presence:room:${roomId}`, {
-      config: { presence: { key: me.userId } },
-    });
-
+    const channel = supabase.channel(`presence:room:${roomId}`, { config: { presence: { key: me.userId } } });
     const sync = () => {
       if (disposed) return;
       const state = channel.presenceState<PresenceEntry>();
-      const flat = Object.values(state)
-        .flatMap((list) => list)
-        .filter((entry) => Boolean(entry?.userId));
-
+      const flat = Object.values(state).flatMap((list) => list).filter((entry) => Boolean(entry?.userId));
       const byUser = new Map<string, PresenceEntry>();
-      for (const entry of flat) {
-        const existing = byUser.get(entry.userId);
-        if (!existing || new Date(entry.onlineAt).getTime() >= new Date(existing.onlineAt).getTime()) {
-          byUser.set(entry.userId, entry);
-        }
-      }
-
-      const next = [...byUser.values()];
-      const nextMap = new Map(next.map((entry) => [entry.userId, entry.displayName]));
-      const previous = previousRef.current;
-      const now = new Date().toISOString();
-
+      for (const entry of flat) { const existing = byUser.get(entry.userId); if (!existing || new Date(entry.onlineAt).getTime() >= new Date(existing.onlineAt).getTime()) byUser.set(entry.userId, entry); }
+      const next = [...byUser.values()]; const nextMap = new Map(next.map((entry) => [entry.userId, entry.displayName])); const previous = previousRef.current; const now = new Date().toISOString();
       next.forEach((entry) => {
         if (!previous.has(entry.userId)) {
           const isOwner = entry.userId === ownerIdRef.current;
-          setActivity((items) => [
-            { id: crypto.randomUUID(), type: "join" as const, displayName: entry.displayName, at: now },
-            ...items,
-          ].slice(0, 8));
-
+          setActivity((items) => [{ id: crypto.randomUUID(), type: "join", displayName: entry.displayName, at: now }, ...items].slice(0, 8));
           if (isOwner) {
+            const avatar = entry.avatarUrl ? <img src={entry.avatarUrl} alt="" className="size-11 rounded-full object-cover ring-2 ring-amber-300/80" /> : <span className="grid size-11 place-items-center rounded-full bg-gradient-to-br from-amber-300 via-yellow-400 to-orange-500 text-xl shadow-[0_0_24px_rgba(251,191,36,.45)]">👑</span>;
             toast(`👑 ${entry.displayName || ownerNameRef.current} دخل الغرفة`, {
-              description: "مالك الغرفة حاضر الآن",
-              duration: 4200,
-              className: "owner-arrival-toast",
+              description: "مالك الغرفة حاضر الآن • ترحيب خاص",
+              duration: 5000,
+              icon: avatar,
+              className: "owner-arrival-toast border-amber-300/40 bg-background/95 shadow-[0_0_35px_rgba(251,191,36,.22)] backdrop-blur-xl",
             });
           }
         }
       });
-
-      previous.forEach((displayName, userId) => {
-        if (!nextMap.has(userId)) {
-          setActivity((items) => [
-            { id: crypto.randomUUID(), type: "leave" as const, displayName, at: now },
-            ...items,
-          ].slice(0, 8));
-        }
-      });
-
-      previousRef.current = nextMap;
-      setEntries(next);
+      previous.forEach((displayName, userId) => { if (!nextMap.has(userId)) setActivity((items) => [{ id: crypto.randomUUID(), type: "leave", displayName, at: now }, ...items].slice(0, 8)); });
+      previousRef.current = nextMap; setEntries(next);
     };
-
     const trackPresence = async () => {
       if (disposed) return;
-      const status: PresenceStatus =
-        document.visibilityState === "hidden" || Date.now() - lastActive > AWAY_AFTER_MS
-          ? "away"
-          : "online";
+      const status: PresenceStatus = document.visibilityState === "hidden" || Date.now() - lastActive > AWAY_AFTER_MS ? "away" : "online";
       const onlineAt = new Date().toISOString();
-      const payload: PresenceEntry = {
-        userId: me.userId,
-        status,
-        displayName: me.displayName || "عضو",
-        avatarUrl: me.avatarUrl ?? null,
-        onlineAt,
-      };
-
-      const result = await channel.track(payload);
-      if (result !== "ok") return;
-
-      await supabase.from("room_presence").upsert(
-        { room_id: roomId, user_id: me.userId, last_seen_at: onlineAt },
-        { onConflict: "room_id,user_id" },
-      );
-      sync();
+      const payload: PresenceEntry = { userId: me.userId, status, displayName: me.displayName || "عضو", avatarUrl: me.avatarUrl ?? null, onlineAt };
+      const result = await channel.track(payload); if (result !== "ok") return;
+      await supabase.from("room_presence").upsert({ room_id: roomId, user_id: me.userId, last_seen_at: onlineAt }, { onConflict: "room_id,user_id" }); sync();
     };
-
-    channel
-      .on("presence", { event: "sync" }, sync)
-      .on("presence", { event: "join" }, sync)
-      .on("presence", { event: "leave" }, sync)
-      .subscribe(async (status) => {
-        if (status !== "SUBSCRIBED") return;
-        await trackPresence();
-        sync();
-      });
-
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        markOnline();
-        void trackPresence();
-      }
-    };
+    channel.on("presence", { event: "sync" }, sync).on("presence", { event: "join" }, sync).on("presence", { event: "leave" }, sync).subscribe(async (status) => { if (status !== "SUBSCRIBED") return; await trackPresence(); sync(); });
+    const handleVisibility = () => { if (document.visibilityState === "visible") { markOnline(); void trackPresence(); } };
     document.addEventListener("visibilitychange", handleVisibility);
-
-    const interval = window.setInterval(() => {
-      void trackPresence();
-    }, HEARTBEAT_MS);
-
-    return () => {
-      disposed = true;
-      window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", handleVisibility);
-      window.removeEventListener("pointerdown", markActive);
-      window.removeEventListener("keydown", markActive);
-      window.removeEventListener("focus", markActive);
-      previousRef.current = new Map();
-      setEntries([]);
-      void channel.untrack();
-      void supabase.from("room_presence").delete().eq("room_id", roomId).eq("user_id", me.userId);
-      supabase.removeChannel(channel);
-    };
+    const interval = window.setInterval(() => { void trackPresence(); }, HEARTBEAT_MS);
+    return () => { disposed = true; window.clearInterval(interval); document.removeEventListener("visibilitychange", handleVisibility); window.removeEventListener("pointerdown", markActive); window.removeEventListener("keydown", markActive); window.removeEventListener("focus", markActive); previousRef.current = new Map(); setEntries([]); void channel.untrack(); void supabase.from("room_presence").delete().eq("room_id", roomId).eq("user_id", me.userId); supabase.removeChannel(channel); };
   }, [roomId, me?.userId, me?.displayName, me?.avatarUrl]);
 
-  return useMemo(() => {
-    const online = entries.filter((entry) => entry.status === "online");
-    return {
-      entries,
-      online,
-      onlineIds: new Set(online.map((entry) => entry.userId)),
-      count: entries.length,
-      activity,
-    };
-  }, [entries, activity]);
+  return useMemo(() => { const online = entries.filter((entry) => entry.status === "online"); return { entries, online, onlineIds: new Set(online.map((entry) => entry.userId)), count: entries.length, activity }; }, [entries, activity]);
 }
