@@ -2,7 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Profile } from "@/types";
 
-export type RoomRole = "owner" | "moderator" | "member";
+export type RoomRole = "owner" | "admin" | "moderator" | "member";
 
 export type RoomMemberRow = { userId: string; role: RoomRole; profile: Profile | null };
 
@@ -10,8 +10,10 @@ export type RoomPermissions = {
   role: RoomRole | null;
   isOwner: boolean;
   isGlobalAdmin: boolean;
+  isRoomAdmin: boolean;
   isRoomModerator: boolean;
   canManageRoles: boolean;
+  canGrantRoomAdmin: boolean;
   canModerate: boolean;
   canMute: boolean;
   canBan: boolean;
@@ -19,11 +21,12 @@ export type RoomPermissions = {
 };
 
 export const EMPTY_PERMISSIONS: RoomPermissions = {
-  role: null, isOwner: false, isGlobalAdmin: false, isRoomModerator: false,
-  canManageRoles: false, canModerate: false, canMute: false, canBan: false, canDeleteMessages: false,
+  role: null, isOwner: false, isGlobalAdmin: false, isRoomAdmin: false, isRoomModerator: false,
+  canManageRoles: false, canGrantRoomAdmin: false, canModerate: false,
+  canMute: false, canBan: false, canDeleteMessages: false,
 };
 
-/** Real permission resolution for a room, derived from Supabase (never mocked). */
+/** Real permission resolution from Supabase. UI never decides authority. */
 export async function fetchRoomPermissions(roomId: string, userId: string): Promise<RoomPermissions> {
   const [{ data: room }, { data: membership }, { data: globalRoles }] = await Promise.all([
     supabase.from("rooms").select("owner_id").eq("id", roomId).maybeSingle(),
@@ -35,13 +38,15 @@ export async function fetchRoomPermissions(roomId: string, userId: string): Prom
   const isGlobalAdmin = roles.has("admin");
   const isGlobalModerator = roles.has("moderator");
   const memberRole = (membership?.role as RoomRole | undefined) ?? null;
-  const isRoomModerator = memberRole === "moderator" || memberRole === "owner";
-  const canManageRoles = isOwner || isGlobalAdmin;
-  const canModerate = canManageRoles || isGlobalModerator || isRoomModerator;
+  const isRoomAdmin = memberRole === "admin";
+  const isRoomModerator = memberRole === "moderator" || isRoomAdmin || memberRole === "owner";
+  const canManageRoles = isOwner || isGlobalAdmin || isRoomAdmin;
+  const canGrantRoomAdmin = isOwner || isGlobalAdmin;
+  const canModerate = canManageRoles || isGlobalModerator;
   return {
     role: isOwner ? "owner" : memberRole,
-    isOwner, isGlobalAdmin, isRoomModerator,
-    canManageRoles, canModerate,
+    isOwner, isGlobalAdmin, isRoomAdmin, isRoomModerator,
+    canManageRoles, canGrantRoomAdmin, canModerate,
     canMute: canModerate, canBan: canModerate, canDeleteMessages: canModerate,
   };
 }
@@ -72,7 +77,6 @@ export const roomMemberRolesQuery = (roomId: string | undefined) =>
     enabled: Boolean(roomId),
   });
 
-/** Persists a room rank change. RLS allows this only for the room owner or a platform admin. */
 export async function setRoomMemberRole(roomId: string, userId: string, role: Exclude<RoomRole, "owner">) {
   const { error } = await supabase.from("room_members").update({ role }).eq("room_id", roomId).eq("user_id", userId);
   if (error) throw error;
