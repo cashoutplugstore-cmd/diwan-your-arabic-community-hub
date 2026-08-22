@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Crown, Mic2, MoreVertical, Shield, Users, LogIn, LogOut } from "lucide-react";
+import { Crown, Gem, Mic2, MoreVertical, Shield, Users, LogIn, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ import type { PresenceActivity, PresenceEntry } from "@/hooks/use-presence";
 import type { Profile } from "@/types";
 
 type Props = { members: Profile[]; presence: PresenceEntry[]; activity?: PresenceActivity[]; roomId?: string };
-type Role = "admin" | "moderator" | "vip" | "speaker" | "owner" | "member" | null;
+type Role = "global_admin" | "admin" | "moderator" | "vip" | "speaker" | "owner" | "member" | null;
 type Row = { id: string; name: string; avatar: string | null; status: "online" | "away" | "offline"; role: Role; speaking: boolean; virtual?: boolean };
 
 function virtualProfile(member: ReturnType<typeof getAiMembersForRoom>[number]): Profile {
@@ -77,7 +77,7 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
       else if (!map.has(row.user_id)) map.set(row.user_id, "member");
     }
     for (const row of rolesQuery.data?.roles ?? []) {
-      if (row.role === "admin" && !map.has(row.user_id)) map.set(row.user_id, "admin");
+      if (row.role === "admin") map.set(row.user_id, "global_admin");
       else if (row.role === "moderator" && !map.has(row.user_id)) map.set(row.user_id, "moderator");
     }
     for (const row of (rolesQuery.data?.vip ?? []) as any[]) if (!map.has(row.user_id)) map.set(row.user_id, "vip");
@@ -96,7 +96,7 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
     const aiRows = virtualMembers.filter((member) => !mergedIds.has(member.id)).map((member, index) => ({ id: member.id, name: member.display_name || member.username || "عضو", avatar: member.avatar_url, status: "online" as const, role: index === 2 || index === 6 ? "vip" as const : "member" as const, speaking: false, virtual: true }));
     return [...merged, ...aiRows];
   }, [members, presence, presenceById, roleById, speakerById, virtualMembers]);
-  const staff = rows.filter((row) => row.role === "admin" || row.role === "owner" || row.role === "moderator");
+  const staff = rows.filter((row) => row.role === "global_admin" || row.role === "admin" || row.role === "owner" || row.role === "moderator");
   const speakers = rows.filter((row) => row.speaking && !staff.some((x) => x.id === row.id));
   const vip = rows.filter((row) => row.role === "vip");
   const online = rows.filter((row) => row.role === "member" && row.status !== "offline");
@@ -116,7 +116,7 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
   }, onError: (error) => toast.error((error as Error).message) });
 
   const renderRoleActions = (row: Row) => {
-    if (!canManageRoles || !roomId || row.virtual || row.id === user?.id || row.id === roomMeta.data?.ownerId || row.role === "speaker") return null;
+    if (!canManageRoles || !roomId || row.virtual || row.id === user?.id || row.id === roomMeta.data?.ownerId || row.role === "speaker" || row.role === "global_admin") return null;
     const isModerator = row.role === "moderator";
     const isAdmin = row.role === "admin";
     return <DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon" className="size-8 shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100" aria-label={`تعديل رتبة ${row.name}`}><MoreVertical className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="min-w-48">
@@ -126,9 +126,9 @@ function PanelContent({ members, presence, activity = [], roomId }: Props) {
       {!isAdmin ? <DropdownMenuItem onClick={() => changeRole.mutate({ userId: row.id, role: isModerator ? "member" : "moderator" })} disabled={changeRole.isPending}><Shield className="size-4" />{isModerator ? "إزالة رتبة المشرف" : "تعيين كمشرف"}</DropdownMenuItem> : null}
     </DropdownMenuContent></DropdownMenu>;
   };
-  const renderRow = (row: Row) => <li key={row.id} className={`group relative flex min-w-0 items-center gap-2 rounded-xl px-2 py-2 transition hover:bg-secondary/60 ${row.role === "admin" ? "border border-rose-400/30 bg-rose-500/[0.08]" : row.role === "owner" ? "border border-amber-400/20 bg-amber-500/[0.05]" : row.role === "moderator" ? "border border-sky-400/15 bg-sky-500/[0.04]" : row.role === "vip" ? "border border-fuchsia-400/15 bg-fuchsia-500/[0.04]" : ""}`}>
-    <Link to="/profile/$userId" params={{ userId: row.id }} className="flex min-w-0 flex-1 items-center gap-2"><UserAvatar name={row.name} src={row.avatar} size="sm" status={row.status} role={row.role === "owner" ? "admin" : row.role === "moderator" || row.role === "admin" || row.role === "vip" ? row.role : null} showMemberBadge={row.role === "member"} autoCurrentRole={false} /><span className={`min-w-0 flex-1 truncate text-xs sm:text-sm ${row.role === "admin" ? "font-black text-rose-300" : row.role === "owner" ? "font-black text-amber-300" : row.role === "vip" ? "font-bold text-fuchsia-300" : row.role === "moderator" ? "font-bold text-sky-300" : "font-semibold"}`}>{row.role === "admin" ? "🌹 👑 " : row.role === "owner" ? "👑 " : ""}{row.name}</span></Link>
-    {row.role === "admin" ? <Badge className="order-first shrink-0 border-rose-400/40 bg-rose-500/15 px-1.5 py-0 text-[8px] font-black text-rose-300">ADMIN</Badge> : null}{row.role === "owner" ? <Badge className="order-first shrink-0 border-amber-400/30 bg-amber-500/10 px-1.5 py-0 text-[8px] font-black text-amber-300">مالك</Badge> : null}{row.role === "moderator" ? <Badge className="order-first shrink-0 border-sky-400/30 bg-sky-500/10 px-1.5 py-0 text-[8px] font-bold text-sky-300">MOD</Badge> : null}{row.role === "vip" ? <Crown className="size-3 shrink-0 text-fuchsia-300" aria-label="VIP" /> : null}{row.speaking ? <Mic2 className="size-3 shrink-0 animate-pulse text-emerald-400" aria-label="على المايك" /> : null}{renderRoleActions(row)}
+  const renderRow = (row: Row) => <li key={row.id} className={`group relative flex min-w-0 items-center gap-2 rounded-xl px-2 py-2 transition hover:bg-secondary/60 ${row.role === "global_admin" ? "border border-rose-500/40 bg-rose-500/[0.10]" : row.role === "admin" ? "border border-rose-400/30 bg-rose-500/[0.08]" : row.role === "owner" ? "border border-amber-400/20 bg-amber-500/[0.05]" : row.role === "moderator" ? "border border-sky-400/15 bg-sky-500/[0.04]" : row.role === "vip" ? "border border-fuchsia-400/15 bg-fuchsia-500/[0.04]" : ""}`}>
+    <Link to="/profile/$userId" params={{ userId: row.id }} className="flex min-w-0 flex-1 items-center gap-2"><UserAvatar name={row.name} src={row.avatar} size="sm" status={row.status} role={row.role === "global_admin" || row.role === "owner" || row.role === "admin" || row.role === "moderator" || row.role === "vip" || row.role === "speaker" ? row.role : null} showMemberBadge={row.role === "member"} autoCurrentRole={false} /><span className={`min-w-0 flex-1 truncate text-xs sm:text-sm ${row.role === "global_admin" ? "font-black text-rose-200" : row.role === "admin" ? "font-black text-rose-300" : row.role === "owner" ? "font-black text-amber-300" : row.role === "vip" ? "font-bold text-fuchsia-300" : row.role === "moderator" ? "font-bold text-sky-300" : "font-semibold"}`}>{row.role === "global_admin" ? "👑👑 " : row.role === "admin" ? "🌹 👑 " : row.role === "owner" ? "👑 " : ""}{row.name}</span></Link>
+    {row.role === "global_admin" ? <Badge className="order-first shrink-0 border-rose-400/50 bg-rose-500/20 px-1.5 py-0 text-[8px] font-black text-rose-200">GLOBAL ADMIN</Badge> : null}{row.role === "admin" ? <Badge className="order-first shrink-0 border-rose-400/40 bg-rose-500/15 px-1.5 py-0 text-[8px] font-black text-rose-300">ADMIN</Badge> : null}{row.role === "owner" ? <Badge className="order-first shrink-0 border-amber-400/30 bg-amber-500/10 px-1.5 py-0 text-[8px] font-black text-amber-300">مالك</Badge> : null}{row.role === "moderator" ? <Badge className="order-first shrink-0 border-sky-400/30 bg-sky-500/10 px-1.5 py-0 text-[8px] font-bold text-sky-300">MOD</Badge> : null}{row.role === "vip" ? <Crown className="size-3 shrink-0 text-fuchsia-300" aria-label="VIP" /> : null}{row.speaking ? <Mic2 className="size-3 shrink-0 animate-pulse text-emerald-400" aria-label="على المايك" /> : null}{renderRoleActions(row)}
   </li>;
   const section = (title: string, list: Row[]) => list.length ? <section className="px-2.5 pt-2.5"><p className="px-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{title} · {list.length}</p><ul className="space-y-1">{list.slice(0, 48).map(renderRow)}</ul></section> : null;
   const onlineCount = rows.filter((row) => row.status !== "offline").length;
