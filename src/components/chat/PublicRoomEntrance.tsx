@@ -19,20 +19,12 @@ export function PublicRoomEntrance({ children, slug }: Props) {
   }, [slug]);
 
   return (
-    <div
-      className="relative min-h-0 overflow-hidden"
-      style={{
-        height: "calc(100% + 78px + env(safe-area-inset-bottom))",
-        marginBottom: "calc(-78px - env(safe-area-inset-bottom))",
-      }}
-    >
-      <div className="h-full min-h-0">
-        <div
-          className="h-full min-h-0"
-          style={{ animation: ready ? "diwanPublicReveal 560ms cubic-bezier(.2,.8,.2,1) both" : undefined }}
-        >
-          {children}
-        </div>
+    <div className="relative h-full min-h-0 min-w-0 overflow-hidden">
+      <div
+        className="h-full min-h-0 min-w-0"
+        style={{ animation: ready ? "diwanPublicReveal 560ms cubic-bezier(.2,.8,.2,1) both" : undefined }}
+      >
+        {children}
       </div>
 
       {visible ? (
