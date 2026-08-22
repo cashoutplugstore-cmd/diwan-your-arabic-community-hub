@@ -28,13 +28,20 @@ export function PublicRoomEntrance({ children, slug }: Props) {
         @keyframes diwanPublicSweep { from { transform:translateX(-125%) skewX(-12deg); opacity:0; } 22% { opacity:.55; } 72% { opacity:.55; } to { transform:translateX(125%) skewX(-12deg); opacity:0; } }
         @keyframes diwanPublicSpark { 0%,100% { transform:translateY(0) scale(.7); opacity:.3; } 50% { transform:translateY(-10px) scale(1); opacity:.9; } }
         @media (prefers-reduced-motion: reduce) { .diwan-public-motion { animation:none !important; } }
+        /* The room page reserves bottom space for the mobile dock. The entrance wrapper is the viewport-sized shell, so let the chat reclaim that reserved area without changing the dock itself. */
+        @media (max-width: 639px) { .diwan-public-room-shell > .diwan-public-room-page { height: calc(100% + 78px) !important; } }
+        @media (min-width: 640px) and (max-width: 1023px) { .diwan-public-room-shell > .diwan-public-room-page { height: calc(100% + 78px) !important; } }
       `}</style>
 
       <div
-        className="h-full min-h-0"
-        style={{ animation: ready ? "diwanPublicReveal 560ms cubic-bezier(.2,.8,.2,1) both" : undefined }}
+        className="diwan-public-room-shell h-full min-h-0"
       >
-        {children}
+        <div
+          className="diwan-public-room-page h-full min-h-0"
+          style={{ animation: ready ? "diwanPublicReveal 560ms cubic-bezier(.2,.8,.2,1) both" : undefined }}
+        >
+          {children}
+        </div>
       </div>
 
       {visible ? (
