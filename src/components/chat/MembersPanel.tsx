@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Crown, Mic2, MoreVertical, Shield, Users, LogIn, LogOut, X } from "lucide-react";
+import { Crown, Mic2, MoreVertical, Shield, Users, LogIn, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -109,15 +109,7 @@ export function MembersPanel(props: Props) {
   const [isMobile, setIsMobile] = useState(false);
   const [open, setOpen] = useState(false);
   const { t } = useI18n();
-  useEffect(() => {
-    const media = window.matchMedia("(max-width: 1023px)");
-    const sync = () => setIsMobile(media.matches);
-    sync();
-    media.addEventListener("change", sync);
-    const onOpen = () => setOpen(true);
-    window.addEventListener("diwan:open-members", onOpen);
-    return () => { media.removeEventListener("change", sync); window.removeEventListener("diwan:open-members", onOpen); };
-  }, []);
-  if (isMobile) return <>{!open ? <div className="sr-only"><Button type="button" onClick={() => setOpen(true)}>{t.chat.members}</Button></div> : null}{open ? <div className="fixed inset-0 z-[70] bg-black/45 backdrop-blur-[2px] animate-in fade-in duration-200" onClick={() => setOpen(false)}><div className="absolute inset-y-0 end-0 flex w-[min(92vw,390px)] flex-col border-s bg-background/95 shadow-2xl backdrop-blur-xl animate-in slide-in-from-end duration-300" onClick={(event) => event.stopPropagation()}><div className="absolute start-3 top-3 z-10"><Button type="button" variant="secondary" size="icon" className="size-9 rounded-full shadow-sm" onClick={() => setOpen(false)} aria-label="إغلاق أعضاء الغرفة"><X className="size-4" /></Button></div><PanelContent {...props} /></div></div> : null}</>;
+  useEffect(() => { const media = window.matchMedia("(max-width: 1023px)"); const sync = () => setIsMobile(media.matches); sync(); media.addEventListener("change", sync); return () => media.removeEventListener("change", sync); }, []);
+  if (isMobile) return <><Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setOpen(true)}><Users className="size-4" />{t.chat.members}</Button>{open ? <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm" onClick={() => setOpen(false)}><div className="absolute inset-y-0 end-0 flex w-[min(92vw,380px)] flex-col bg-background shadow-2xl" onClick={(event) => event.stopPropagation()}><Button type="button" variant="ghost" size="icon" className="absolute start-2 top-2 z-10" onClick={() => setOpen(false)} aria-label="إغلاق">×</Button><PanelContent {...props} /></div></div> : null}</>;
   return <PanelContent {...props} />;
 }
