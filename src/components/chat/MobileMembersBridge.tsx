@@ -1,18 +1,19 @@
 import { useEffect } from "react";
 
 /**
- * Keeps the existing mobile MembersPanel trigger in sync with the compact
- * members button in ChatRoomPage. The chat header dispatches this event so
- * the member drawer opens without taking layout space from the conversation.
+ * Restores the original room-name interaction: clicking the room identity
+ * opens MembersPanel without requiring a separate Members button.
  */
 export function MobileMembersBridge() {
   useEffect(() => {
-    const openMembers = () => {
-      const button = Array.from(document.querySelectorAll("button")).find((node) => node.textContent?.trim() === "الأعضاء") as HTMLButtonElement | undefined;
-      button?.click();
+    const onRoomNameClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      const heading = target?.closest("header h1");
+      if (!heading) return;
+      window.dispatchEvent(new CustomEvent("diwan:open-members"));
     };
-    window.addEventListener("diwan:open-members", openMembers);
-    return () => window.removeEventListener("diwan:open-members", openMembers);
+    document.addEventListener("click", onRoomNameClick);
+    return () => document.removeEventListener("click", onRoomNameClick);
   }, []);
 
   return null;
